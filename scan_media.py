@@ -12,7 +12,7 @@ import pandas as pd
 from PIL import Image, ExifTags, ImageOps
 from pillow_heif import register_heif_opener
 
-from config import MEDIA_CSV, THUMB_DIR
+from config import MEDIA_INDEX_CSV, THUMB_DIR
 
 register_heif_opener()
 
@@ -175,8 +175,8 @@ def scan(root):
         if i % 250 == 0:
             print(f"{i:,}/{len(paths):,}")
     df = pd.DataFrame(rows)
-    df.to_csv(MEDIA_CSV, index=False)
-    print(f"Índice guardado en {MEDIA_CSV}")
+    df.to_csv(MEDIA_INDEX_CSV, index=False)
+    print(f"Índice guardado en {MEDIA_INDEX_CSV}")
     return df
 
 if __name__ == "__main__":

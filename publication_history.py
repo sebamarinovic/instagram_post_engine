@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 import hashlib, os
 import pandas as pd
 
-HISTORY_FILE = Path("data/published_media.csv")
+from config import PUBLISHED_MEDIA_CSV
+
+HISTORY_FILE = PUBLISHED_MEDIA_CSV
 COLUMNS = [
     "media_key","path","filename","published_at","instagram_media_id",
     "publication_id","caption","country","city","year","permalink","source"
