@@ -18,4 +18,6 @@ data/experiences.csv
 data/published_media.csv
 data/drafts/
 
+config/media_sources.json
+
 *.log

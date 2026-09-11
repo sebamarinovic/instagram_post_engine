@@ -6,6 +6,7 @@ from ai_post_generator import generate_post
 from publisher import config_status, publish_images
 from publication_history import load_history, media_key, record_publication, record_existing_publication
 from config import MEDIA_GEO_CSV, PROFILE_CONTEXT_JSON
+import media_sources as ms
 
 st.set_page_config(page_title="Instagram Rebuild", layout="wide")
 
@@ -16,6 +17,11 @@ if not MEDIA_GEO_CSV.exists():
 df = pd.read_csv(MEDIA_GEO_CSV)
 df["captured_at"] = pd.to_datetime(df["captured_at"], errors="coerce")
 df["quality_score"] = pd.to_numeric(df["quality_score"], errors="coerce").fillna(0)
+
+if "source_id" in df.columns:
+    disabled_ids = {s["id"] for s in ms.list_sources() if not s.get("enabled", True)}
+    if disabled_ids:
+        df = df[~df["source_id"].isin(disabled_ids)]
 
 DEFAULT_PROFILE = """Sebastián. Chileno-croata 🇨🇱🇭🇷.
 Ingeniero Civil Industrial con vínculo a metalurgia y procesos industriales.
@@ -65,6 +71,7 @@ published_set = set(history["media_key"].dropna().astype(str))
 st.title("🚀 Instagram Rebuild")
 st.caption("Explorar → seleccionar → contextualizar → crear → revisar → publicar → registrar")
 
+st.sidebar.caption("⚙️ Administra tus carpetas de fotos en 'Fuentes multimedia' (menú lateral arriba).")
 st.sidebar.header("🔎 Explorar")
 
 if st.sidebar.button("🔄 Reiniciar búsqueda", use_container_width=True):

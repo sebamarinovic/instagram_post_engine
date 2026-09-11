@@ -1,0 +1,13 @@
+{
+  "sources": [
+    {
+      "id": "instagram_backup_01",
+      "name": "Instagram Backup",
+      "path": "C:\\InstagramRebuild\\SOURCE_INSTAGRAM\\Instagram_01",
+      "enabled": true,
+      "primary": true,
+      "last_scanned_at": null,
+      "last_scan_items": 0
+    }
+  ]
+}

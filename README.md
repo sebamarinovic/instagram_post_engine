@@ -21,31 +21,48 @@ copy .env.example .env
 ```
 
 ## 2. Escanear la biblioteca
-Ejemplo:
 
+**Opción A — desde la app (recomendado):**
+```powershell
+streamlit run app.py
+```
+Abre la página **⚙️ Fuentes multimedia** (menú lateral). Ahí agregas cada carpeta
+de fotos/videos por nombre y ruta, y por cada una puedes: activarla/desactivarla,
+reescanearla completa, o traer solo los archivos nuevos desde la última vez.
+No hace falta tocar código ni terminal para cambiar de carpeta o agregar una nueva
+(ej. un backup de Instagram, tu librería de iCloud, un álbum de viajes en otro disco).
+Los datos de fuentes viven en `config/media_sources.json` (no se sube a git: es
+específico de tu equipo — usa `config/media_sources.example.json` como referencia
+del formato).
+
+**Opción B — por terminal (una sola carpeta, sin registrar fuente):**
 ```powershell
 python scan_media.py --root "C:\Users\sebam\Pictures\iCloud Photos"
 ```
 
 Con 100k+ archivos puede tardar bastante. Es normal.
-Se genera `data/media_index.csv`.
+Cualquiera de las dos opciones genera/actualiza `data/media_index.csv`.
 
 ## 3. Enriquecer con ubicación
+Desde la misma página **⚙️ Fuentes multimedia**, botón "🌍 Recalcular ubicación",
+o por terminal:
 ```powershell
 python enrich_locations.py
 ```
 
 Genera `data/media_geo.csv`: país/ciudad por GPS exacto o por inferencia temporal
 (±12 h) cuando no hay GPS, más `date_source`/`location_source` para filtrar por
-confiabilidad del dato.
+confiabilidad del dato. Corre esto cada vez que agregues fotos nuevas.
 
-## 4. Abrir el motor de publicación
+## 4. Publicar
 ```powershell
 streamlit run app.py
 ```
 
-Ahí filtras por país/ciudad/año/tipo, seleccionas material, generas 3 propuestas
-de caption con IA, revisas y publicas — con historial para no repetir contenido.
+En la página principal filtras por país/ciudad/año/tipo, seleccionas material,
+generas 3 propuestas de caption con IA, revisas y publicas — con historial para
+no repetir contenido. Las fuentes desactivadas en "⚙️ Fuentes multimedia" no
+aparecen aquí.
 
 ## 5. IA opcional
 Crea una API key en tu proveedor y colócala en `.env`:

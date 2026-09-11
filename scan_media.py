@@ -152,10 +152,11 @@ def video_probe(path):
         row["error"] = "ffprobe/ffmpeg no disponible o video no descargado: " + str(e)[:200]
         return row
 
-def scan(root):
+def find_media_files(root):
     root = Path(root)
-    paths = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (IMAGE_EXTS | VIDEO_EXTS)]
-    print(f"Encontrados {len(paths):,} archivos multimedia.")
+    return [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (IMAGE_EXTS | VIDEO_EXTS)]
+
+def build_index(paths, source_id=None, source_name=None, source_path=None):
     rows = []
     for i,p in enumerate(paths,1):
         ext = p.suffix.lower()
@@ -166,6 +167,9 @@ def scan(root):
             "media_type": "image" if ext in IMAGE_EXTS else "video",
             "size_mb": round(p.stat().st_size / 1024 / 1024, 3),
             "filesystem_mtime": datetime.fromtimestamp(p.stat().st_mtime).isoformat(sep=" "),
+            "source_id": source_id,
+            "source_name": source_name,
+            "source_path": source_path,
         }
         meta = image_metrics(p) if ext in IMAGE_EXTS else video_probe(p)
         base.update(meta)
@@ -174,7 +178,39 @@ def scan(root):
         rows.append(base)
         if i % 250 == 0:
             print(f"{i:,}/{len(paths):,}")
-    df = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
+
+def load_index():
+    if MEDIA_INDEX_CSV.exists():
+        return pd.read_csv(MEDIA_INDEX_CSV)
+    return pd.DataFrame()
+
+def merge_source_into_index(df_new, source_id, replace):
+    """Merge a freshly scanned source into the on-disk index.
+
+    replace=True drops any previous rows for this source_id before adding
+    df_new (a full rescan). replace=False only guards against re-adding a
+    path that's already indexed (used for incremental "new files" scans,
+    where df_new is expected to already exclude known paths).
+    """
+    existing = load_index()
+    if existing.empty:
+        merged = df_new
+    else:
+        if replace and "source_id" in existing.columns:
+            existing = existing[existing["source_id"] != source_id]
+        if not replace:
+            known_paths = set(existing["path"].astype(str))
+            df_new = df_new[~df_new["path"].astype(str).isin(known_paths)]
+        merged = pd.concat([existing, df_new], ignore_index=True)
+    merged.to_csv(MEDIA_INDEX_CSV, index=False)
+    return merged
+
+def scan(root):
+    """CLI entry point: full scan of one folder, overwrites the whole index."""
+    paths = find_media_files(root)
+    print(f"Encontrados {len(paths):,} archivos multimedia.")
+    df = build_index(paths, source_path=str(Path(root)))
     df.to_csv(MEDIA_INDEX_CSV, index=False)
     print(f"Índice guardado en {MEDIA_INDEX_CSV}")
     return df
