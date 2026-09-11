@@ -1,0 +1,12 @@
+pandas>=2.2
+numpy>=1.26
+Pillow>=10.4
+pillow-heif>=0.18
+opencv-python-headless>=4.10
+ImageHash>=4.3
+streamlit>=1.39
+python-dotenv>=1.0
+reverse_geocoder>=1.5.1
+openai>=1.100
+boto3>=1.35
+requests>=2.32
