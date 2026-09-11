@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import math
 import os
 import subprocess
@@ -156,6 +157,18 @@ def find_media_files(root):
     root = Path(root)
     return [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (IMAGE_EXTS | VIDEO_EXTS)]
 
+def file_content_hash(path, chunk_size=1024 * 1024):
+    """SHA-256 of the file's bytes — identifies a photo/video by content, not by path,
+    so the same file kept in two folders (or moved/renamed) is recognized as one item."""
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(chunk_size), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return None
+
 def build_index(paths, source_id=None, source_name=None, source_path=None):
     rows = []
     for i,p in enumerate(paths,1):
@@ -167,6 +180,7 @@ def build_index(paths, source_id=None, source_name=None, source_path=None):
             "media_type": "image" if ext in IMAGE_EXTS else "video",
             "size_mb": round(p.stat().st_size / 1024 / 1024, 3),
             "filesystem_mtime": datetime.fromtimestamp(p.stat().st_mtime).isoformat(sep=" "),
+            "content_hash": file_content_hash(p),
             "source_id": source_id,
             "source_name": source_name,
             "source_path": source_path,

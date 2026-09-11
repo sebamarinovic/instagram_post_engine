@@ -14,6 +14,20 @@ if not MEDIA_GEO_CSV.exists():
     st.error(f"Falta {MEDIA_GEO_CSV}")
     st.stop()
 
+def dedupe_by_content(df):
+    """Collapse rows that are the same file (by content_hash) seen in more than
+    one source folder, keeping the best copy (highest quality_score, then
+    earliest captured_at). Rows without a content_hash (scanned before this
+    feature existed) are left untouched — nothing to compare them against."""
+    if "content_hash" not in df.columns:
+        return df, 0
+    ch = df["content_hash"].astype(str).str.strip().str.lower()
+    has_hash = ~ch.isin(["", "nan", "none"])
+    with_hash = df[has_hash].sort_values(["quality_score","captured_at"], ascending=[False, True])
+    canonical = with_hash.drop_duplicates(subset="content_hash", keep="first")
+    without_hash = df[~has_hash]
+    return pd.concat([canonical, without_hash], ignore_index=False), len(with_hash) - len(canonical)
+
 df = pd.read_csv(MEDIA_GEO_CSV)
 df["captured_at"] = pd.to_datetime(df["captured_at"], errors="coerce")
 df["quality_score"] = pd.to_numeric(df["quality_score"], errors="coerce").fillna(0)
@@ -22,6 +36,8 @@ if "source_id" in df.columns:
     disabled_ids = {s["id"] for s in ms.list_sources() if not s.get("enabled", True)}
     if disabled_ids:
         df = df[~df["source_id"].isin(disabled_ids)]
+
+df, duplicate_count = dedupe_by_content(df)
 
 DEFAULT_PROFILE = """Sebastián. Chileno-croata 🇨🇱🇭🇷.
 Ingeniero Civil Industrial con vínculo a metalurgia y procesos industriales.
@@ -110,14 +126,21 @@ if date_sources:
     work = work[work.date_source.isin(date_sources)]
 
 work = work.copy()
-work["_media_key"] = work["path"].astype(str).map(media_key)
-work["_published"] = work["_media_key"].isin(published_set)
+work["_path_key"] = work["path"].astype(str).map(media_key)
+if "content_hash" in work.columns:
+    ch = work["content_hash"].astype(str).str.strip().str.lower()
+    work["_content_key"] = ch.where(~ch.isin(["", "nan", "none"]))
+else:
+    work["_content_key"] = None
+work["_published"] = work["_path_key"].isin(published_set) | work["_content_key"].isin(published_set)
 if hide_published:
     work = work[~work["_published"]]
 
 st.sidebar.divider()
 st.sidebar.metric("✅ Seleccionadas", len(st.session_state.selected_paths))
 st.sidebar.metric("📤 Publicadas registradas", len(published_set))
+if duplicate_count:
+    st.sidebar.metric("🔁 Duplicados omitidos", duplicate_count)
 
 if st.sidebar.button("🗑️ Limpiar selección", use_container_width=True):
     clear_selection()
@@ -162,6 +185,9 @@ for pos,(_,row) in enumerate(gallery.iterrows()):
 
 selected_df = df[df.path.astype(str).isin(st.session_state.selected_paths)].copy()
 selected_keys = set(selected_df["path"].astype(str).map(media_key))
+if "content_hash" in selected_df.columns:
+    ch = selected_df["content_hash"].astype(str).str.strip().str.lower()
+    selected_keys |= set(ch[~ch.isin(["", "nan", "none"])])
 selected_already = selected_keys.intersection(published_set)
 
 st.divider()

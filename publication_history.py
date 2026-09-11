@@ -14,8 +14,28 @@ COLUMNS = [
 def normalize_path(path):
     return os.path.normcase(os.path.abspath(str(path)))
 
-def media_key(path):
+def _path_key(path):
     return hashlib.sha256(normalize_path(path).encode("utf-8")).hexdigest()
+
+def _content_key(content_hash):
+    return str(content_hash).strip().lower()
+
+def media_key(path, content_hash=None):
+    """Identifier to store for a file: content hash when known (stable across
+    moves/renames/duplicate folders), otherwise a hash of its path (legacy
+    behavior, kept for files scanned before content hashing existed)."""
+    if content_hash and str(content_hash).strip() and str(content_hash).lower() != "nan":
+        return _content_key(content_hash)
+    return _path_key(path)
+
+def media_keys(path, content_hash=None):
+    """Every identifier that could refer to this file, for matching against
+    history recorded under either scheme (path-based entries predate content
+    hashing; a file rescanned since then also has a content-based key)."""
+    keys = {_path_key(path)}
+    if content_hash and str(content_hash).strip() and str(content_hash).lower() != "nan":
+        keys.add(_content_key(content_hash))
+    return keys
 
 def load_history():
     if not HISTORY_FILE.exists():
@@ -48,9 +68,10 @@ def record_publication(records, caption, api_result):
 
     rows = []
     for r in records:
-        k = media_key(r["path"])
-        if k in existing:
+        content_hash = r.get("content_hash")
+        if media_keys(r["path"], content_hash) & existing:
             continue
+        k = media_key(r["path"], content_hash)
 
         rows.append({
             "media_key": k,
@@ -77,9 +98,10 @@ def record_existing_publication(records, permalink, note="Publicación históric
 
     rows = []
     for r in records:
-        k = media_key(r["path"])
-        if k in existing:
+        content_hash = r.get("content_hash")
+        if media_keys(r["path"], content_hash) & existing:
             continue
+        k = media_key(r["path"], content_hash)
 
         rows.append({
             "media_key": k,

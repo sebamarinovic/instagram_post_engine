@@ -35,6 +35,12 @@ Los datos de fuentes viven en `config/media_sources.json` (no se sube a git: es
 específico de tu equipo — usa `config/media_sources.example.json` como referencia
 del formato).
 
+Cada archivo se identifica además por el SHA-256 de su contenido (`content_hash`),
+no solo por su ruta. Si la misma foto existe en dos carpetas (ej. tu backup de
+Instagram y tu librería de iCloud), el motor de publicación la detecta como una
+sola y solo ofrece la mejor copia — y una foto ya publicada se sigue reconociendo
+como publicada aunque después la muevas o la renombres.
+
 **Opción B — por terminal (una sola carpeta, sin registrar fuente):**
 ```powershell
 python scan_media.py --root "C:\Users\sebam\Pictures\iCloud Photos"

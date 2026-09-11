@@ -13,6 +13,17 @@ st.caption("Agrega, activa/desactiva o reescanea carpetas de fotos y videos sin 
 
 index_df = load_index()
 
+if not index_df.empty and "content_hash" in index_df.columns:
+    ch = index_df["content_hash"].astype(str).str.strip().str.lower()
+    has_hash = ~ch.isin(["", "nan", "none"])
+    dup_hashes = ch[has_hash][ch[has_hash].duplicated(keep=False)]
+    if len(dup_hashes):
+        st.info(
+            f"🔁 {dup_hashes.nunique()} archivo(s) están repetidos en más de una carpeta "
+            f"({len(dup_hashes)} copias en total). El motor de publicación ya los combina "
+            "y solo ofrece la mejor copia de cada uno."
+        )
+
 st.subheader("➕ Agregar carpeta")
 with st.form("add_source_form", clear_on_submit=True):
     c1, c2 = st.columns([1, 2])
