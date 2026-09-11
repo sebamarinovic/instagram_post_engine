@@ -4,7 +4,7 @@ import streamlit as st
 
 import media_sources as ms
 import enrich_locations
-from scan_media import find_media_files, merge_source_into_index, build_index, load_index
+from scan_media import find_media_files, merge_source_into_index, build_index, load_index, scan_source_incremental
 from config import MEDIA_GEO_CSV, MEDIA_INDEX_CSV
 
 st.set_page_config(page_title="Fuentes multimedia", layout="wide")
@@ -82,27 +82,34 @@ for source in sources:
 
         b1, b2, b3 = st.columns(3)
 
-        if b1.button("🔄 Reescanear completo", key=f"full_{sid}", disabled=not path_exists, use_container_width=True):
-            with st.spinner(f"Reescaneando '{source['name']}'..."):
+        if b1.button(
+            "🔄 Actualizar biblioteca", key=f"incr_{sid}", disabled=not path_exists,
+            use_container_width=True,
+            help="Solo analiza lo que cambió: agrega archivos nuevos, re-procesa los modificados "
+                 "y quita del índice los que ya no existen. No vuelve a tocar lo que sigue igual."
+        ):
+            with st.spinner(f"Actualizando '{source['name']}'..."):
+                stats = scan_source_incremental(sid, source["name"], source["path"])
+                total = stats["new"] + stats["modified"] + stats["unchanged"]
+            ms.update_scan_stats(sid, total)
+            st.success(
+                f"🆕 {stats['new']} nuevo(s) · ✏️ {stats['modified']} modificado(s) · "
+                f"🗑️ {stats['removed']} eliminado(s) · ⏭️ {stats['unchanged']} sin cambios."
+            )
+            st.rerun()
+
+        if b2.button(
+            "♻️ Reconstruir índice completo", key=f"full_{sid}", disabled=not path_exists,
+            use_container_width=True,
+            help="Vuelve a analizar TODOS los archivos de esta carpeta desde cero, "
+                 "aunque no hayan cambiado. Úsalo si sospechas que el índice quedó inconsistente."
+        ):
+            with st.spinner(f"Reconstruyendo índice de '{source['name']}'..."):
                 paths = find_media_files(source["path"])
                 df_new = build_index(paths, sid, source["name"], source["path"])
                 merge_source_into_index(df_new, sid, replace=True)
                 ms.update_scan_stats(sid, len(df_new))
             st.success(f"{len(df_new)} archivo(s) indexados desde '{source['name']}'.")
-            st.rerun()
-
-        if b2.button("🆕 Actualizar solo nuevos", key=f"new_{sid}", disabled=not path_exists, use_container_width=True):
-            with st.spinner(f"Buscando archivos nuevos en '{source['name']}'..."):
-                paths = find_media_files(source["path"])
-                known = set(index_df["path"].astype(str)) if not index_df.empty else set()
-                new_paths = [p for p in paths if str(p) not in known]
-                total = int((index_df["source_id"] == sid).sum()) if not index_df.empty and "source_id" in index_df.columns else 0
-                if new_paths:
-                    df_new = build_index(new_paths, sid, source["name"], source["path"])
-                    merged = merge_source_into_index(df_new, sid, replace=False)
-                    total = int((merged["source_id"] == sid).sum())
-            ms.update_scan_stats(sid, total)
-            st.success(f"{len(new_paths)} archivo(s) nuevo(s) agregados." if new_paths else "No hay archivos nuevos.")
             st.rerun()
 
         if b3.button("⭐ Marcar como principal", key=f"pri_{sid}", disabled=source.get("primary", False), use_container_width=True):

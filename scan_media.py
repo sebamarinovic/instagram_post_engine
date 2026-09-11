@@ -220,6 +220,64 @@ def merge_source_into_index(df_new, source_id, replace):
     merged.to_csv(MEDIA_INDEX_CSV, index=False)
     return merged
 
+def scan_source_incremental(source_id, source_name, source_path):
+    """Update one source's rows without re-analyzing files that haven't changed.
+
+    Compares what's on disk now against what's in the index for this source:
+    - new: on disk, not in the index -> scanned and added.
+    - modified: in the index, but filesystem_mtime differs from what's stored
+      -> re-scanned (metrics, thumbnail and content_hash recomputed) and its
+      old row replaced.
+    - removed: in the index, no longer on disk -> row dropped.
+    - unchanged: left exactly as they are, no re-analysis at all.
+
+    Returns a stats dict: {"new": n, "modified": n, "removed": n, "unchanged": n}.
+    """
+    on_disk = find_media_files(source_path)
+    on_disk_by_path = {str(p): p for p in on_disk}
+
+    existing = load_index()
+    if not existing.empty and "source_id" in existing.columns:
+        source_rows = existing[existing["source_id"] == source_id]
+        other_rows = existing[existing["source_id"] != source_id]
+    else:
+        source_rows = existing.iloc[0:0]
+        other_rows = existing
+
+    known_mtime = {
+        str(r["path"]): r.get("filesystem_mtime") for _, r in source_rows.iterrows()
+    }
+
+    new_paths, modified_paths = [], []
+    unchanged = 0
+    for path_str, p in on_disk_by_path.items():
+        if path_str not in known_mtime:
+            new_paths.append(p)
+            continue
+        current_mtime = datetime.fromtimestamp(p.stat().st_mtime).isoformat(sep=" ")
+        if str(known_mtime[path_str]) != current_mtime:
+            modified_paths.append(p)
+        else:
+            unchanged += 1
+
+    removed_paths = [pth for pth in known_mtime if pth not in on_disk_by_path]
+
+    to_rescan = new_paths + modified_paths
+    rescanned = build_index(to_rescan, source_id, source_name, source_path) if to_rescan else pd.DataFrame()
+
+    stale = set(removed_paths) | {str(p) for p in modified_paths}
+    kept_rows = source_rows[~source_rows["path"].astype(str).isin(stale)] if not source_rows.empty else source_rows
+
+    merged = pd.concat([other_rows, kept_rows, rescanned], ignore_index=True)
+    merged.to_csv(MEDIA_INDEX_CSV, index=False)
+
+    return {
+        "new": len(new_paths),
+        "modified": len(modified_paths),
+        "removed": len(removed_paths),
+        "unchanged": unchanged,
+    }
+
 def scan(root):
     """CLI entry point: full scan of one folder, overwrites the whole index."""
     paths = find_media_files(root)

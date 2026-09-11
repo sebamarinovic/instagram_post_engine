@@ -28,7 +28,15 @@ streamlit run app.py
 ```
 Abre la página **⚙️ Fuentes multimedia** (menú lateral). Ahí agregas cada carpeta
 de fotos/videos por nombre y ruta, y por cada una puedes: activarla/desactivarla,
-reescanearla completa, o traer solo los archivos nuevos desde la última vez.
+o actualizarla con alguno de estos dos botones:
+
+- **🔄 Actualizar biblioteca** — incremental: detecta archivos nuevos, modificados
+  (mtime cambió) y eliminados desde el último escaneo, y solo reprocesa esos. Si
+  una carpeta ya tenía 3.000 fotos indexadas y agregaste 20, no vuelve a analizar
+  las 3.000.
+- **♻️ Reconstruir índice completo** — reanaliza todo desde cero; úsala solo si
+  sospechas que el índice quedó inconsistente.
+
 No hace falta tocar código ni terminal para cambiar de carpeta o agregar una nueva
 (ej. un backup de Instagram, tu librería de iCloud, un álbum de viajes en otro disco).
 Los datos de fuentes viven en `config/media_sources.json` (no se sube a git: es
