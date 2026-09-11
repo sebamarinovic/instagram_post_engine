@@ -1,6 +1,6 @@
 # Instagram Rebuild MVP
 
-Objetivo: convertir una fototeca grande de iCloud en experiencias y candidatos publicables sin revisar archivo por archivo.
+Objetivo: convertir una fototeca grande de iCloud en candidatos publicables sin revisar archivo por archivo.
 
 ## 0. Antes de comenzar
 Asegúrate de que las fotos/videos estén descargados localmente ("Mantener siempre en este dispositivo").
@@ -30,26 +30,22 @@ python scan_media.py --root "C:\Users\sebam\Pictures\iCloud Photos"
 Con 100k+ archivos puede tardar bastante. Es normal.
 Se genera `data/media_index.csv`.
 
-## 3. Crear experiencias
+## 3. Enriquecer con ubicación
 ```powershell
-python cluster_experiences.py
+python enrich_locations.py
 ```
 
-Criterios iniciales:
-- corte temporal: 72 h
-- salto geográfico: 600 km
+Genera `data/media_geo.csv`: país/ciudad por GPS exacto o por inferencia temporal
+(±12 h) cuando no hay GPS, más `date_source`/`location_source` para filtrar por
+confiabilidad del dato.
 
-Puedes ajustar:
-```powershell
-python cluster_experiences.py --max-gap-hours 96 --jump-km 800
-```
-
-## 4. Abrir dashboard
+## 4. Abrir el motor de publicación
 ```powershell
 streamlit run app.py
 ```
 
-Ahí verás las experiencias y los mejores candidatos.
+Ahí filtras por país/ciudad/año/tipo, seleccionas material, generas 3 propuestas
+de caption con IA, revisas y publicas — con historial para no repetir contenido.
 
 ## 5. IA opcional
 Crea una API key en tu proveedor y colócala en `.env`:
@@ -67,7 +63,7 @@ Nunca pongas tokens en el código ni en GitHub.
 
 ```text
 INSTAGRAM_ACCESS_TOKEN=...
-INSTAGRAM_USER_ID=27816318048070268
+INSTAGRAM_USER_ID=...
 ```
 
 ## 7. AWS S3
@@ -84,7 +80,7 @@ S3_BUCKET=
 
 ## Estrategia recomendada
 1. PC filtra 100k+ archivos.
-2. Cada experiencia queda con ~20-30 candidatos.
+2. Filtras por país/ciudad/año hasta llegar a un puñado de candidatos.
 3. Tú marcas 5-10.
 4. IA genera orden, caption y concepto.
 5. Tú apruebas.
