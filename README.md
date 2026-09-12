@@ -134,6 +134,27 @@ país/ciudad, caption, ID de Instagram y un link para abrir el post real
 (cuando existe). Se puede buscar por texto y filtrar por país, exportar a
 CSV, y hay un detalle por foto individual si lo necesitas.
 
+## 10. Base de datos (opcional, todavía no activa)
+Hoy todo vive en CSV/JSON bajo `data/` y `config/` — la app sigue leyendo y
+escribiendo esos archivos exclusivamente. Hay un esquema SQLite listo
+(`db.py`: tablas `media`, `sources`, `publications`, `publication_media`,
+`settings`) y un script de migración que puedes correr cuando quieras
+probarlo, sin ningún riesgo:
+
+```powershell
+python migrate_to_sqlite.py
+```
+
+Esto: hace backup de tus CSV/JSON actuales en
+`data/backup_pre_sqlite_<fecha>/`, crea/actualiza `data/instagram_rebuild.db`,
+y valida la migración (conteos + spot-check de filas al azar) imprimiendo un
+reporte. **No borra ni modifica los archivos originales**, y la app no lee de
+esta base de datos todavía — es un paso separado y deliberado, para cuando
+decidas que vale la pena el cambio (por ejemplo si tu fototeca crece lo
+suficiente como para que leer el CSV completo en cada interacción de
+Streamlit empiece a notarse). Puedes correrlo las veces que quieras: es
+idempotente, no duplica filas.
+
 ## Estrategia recomendada
 1. PC filtra 100k+ archivos.
 2. Filtras por país/ciudad/año hasta llegar a un puñado de candidatos.
