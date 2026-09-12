@@ -115,6 +115,25 @@ AWS_DEFAULT_REGION=
 S3_BUCKET=
 ```
 
+## 8. Modo prueba (DRY_RUN)
+```text
+DRY_RUN=true
+```
+Con `DRY_RUN=true` (el valor por defecto en `.env.example`), el botón de
+publicar se convierte en "🧪 SIMULAR PUBLICACIÓN": no se llama a la API de
+Instagram ni se sube nada a S3, no hace falta tener credenciales configuradas,
+y el resultado simulado igual se registra en el historial (marcado con
+`source=dry_run`) para que puedas probar todo el flujo — selección, límite de
+10, generación de caption, "ya publicada" — sin publicar nada de verdad.
+Pon `DRY_RUN=false` solo cuando quieras publicar en serio.
+
+## 9. Historial de publicaciones
+En la app, el expander **📚 Historial de publicaciones** agrupa las fotos por
+publicación (una fila por post, no por foto): fecha, cantidad de fotos,
+país/ciudad, caption, ID de Instagram y un link para abrir el post real
+(cuando existe). Se puede buscar por texto y filtrar por país, exportar a
+CSV, y hay un detalle por foto individual si lo necesitas.
+
 ## Estrategia recomendada
 1. PC filtra 100k+ archivos.
 2. Filtras por país/ciudad/año hasta llegar a un puñado de candidatos.

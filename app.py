@@ -3,8 +3,8 @@ import hashlib, json
 import pandas as pd
 import streamlit as st
 from ai_post_generator import generate_post
-from publisher import config_status, publish_images
-from publication_history import load_history, media_key, record_publication, record_existing_publication
+from publisher import config_status, publish_images, DRY_RUN
+from publication_history import load_history, media_key, record_publication, record_existing_publication, summarize_publications
 from config import MEDIA_GEO_CSV, PROFILE_CONTEXT_JSON
 from curation import pick_best
 import media_sources as ms
@@ -12,6 +12,9 @@ import media_sources as ms
 MAX_CAROUSEL = 10
 
 st.set_page_config(page_title="Instagram Rebuild", layout="wide")
+
+if DRY_RUN:
+    st.info("🧪 **DRY_RUN activo** — las publicaciones se simulan. No se llama a la API de Instagram ni se sube nada a S3.")
 
 if not MEDIA_GEO_CSV.exists():
     st.error(f"Falta {MEDIA_GEO_CSV}")
@@ -326,9 +329,9 @@ if draft:
     if len(ordered) != len(selected_records):
         ordered = selected_records
 
-    st.subheader("🚀 Publicación real")
+    st.subheader("🧪 Simulación (DRY_RUN)" if DRY_RUN else "🚀 Publicación real")
     cfg = config_status()
-    missing = [k for k,v in cfg.items() if not v]
+    missing = [] if DRY_RUN else [k for k,v in cfg.items() if not v]
     all_images = all(str(r.get("media_type"))=="image" for r in ordered)
 
     if missing:
@@ -339,13 +342,15 @@ if draft:
     confirm = st.checkbox("✅ Confirmo que revisé fotos, orden y texto y quiero publicarlo", key="confirm_publish")
     ready = not missing and all_images and 1 <= len(ordered) <= MAX_CAROUSEL and confirm and (allow_reuse or not selected_already)
 
-    if st.button("🚀 PUBLICAR AHORA EN INSTAGRAM", type="primary", disabled=not ready, use_container_width=True):
-        with st.spinner("Publicando..."):
+    button_label = "🧪 SIMULAR PUBLICACIÓN (DRY_RUN)" if DRY_RUN else "🚀 PUBLICAR AHORA EN INSTAGRAM"
+    if st.button(button_label, type="primary", disabled=not ready, use_container_width=True):
+        with st.spinner("Simulando..." if DRY_RUN else "Publicando..."):
             try:
                 result = publish_images([r["path"] for r in ordered], caption_final)
                 added = record_publication(ordered, caption_final, result)
                 clear_selection()
-                st.session_state.flash_message = f"✅ Publicación realizada. {added} archivo(s) registrados para no repetir."
+                msg = "🧪 Simulación completada" if DRY_RUN else "✅ Publicación realizada"
+                st.session_state.flash_message = f"{msg}. {added} archivo(s) registrados para no repetir."
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Error al publicar: {e}")
@@ -356,11 +361,50 @@ with st.expander("📚 Historial de publicaciones"):
     if hist.empty:
         st.info("Todavía no hay publicaciones registradas.")
     else:
-        show = [c for c in ["published_at","filename","country","city","year","instagram_media_id"] if c in hist.columns]
-        st.dataframe(hist[show].sort_values("published_at", ascending=False), use_container_width=True, hide_index=True)
-        st.download_button(
-            "⬇️ Descargar historial CSV",
-            hist.to_csv(index=False).encode("utf-8-sig"),
-            "instagram_published_media.csv",
-            "text/csv"
+        summary = summarize_publications(hist)
+
+        f1, f2 = st.columns([2, 1])
+        search = f1.text_input("🔎 Buscar (caption, país, ciudad, archivo)", key="hist_search")
+        country_opts = ["Todos"] + sorted(summary["country"].dropna().astype(str).unique().tolist())
+        hist_country = f2.selectbox("🌎 País", country_opts, key="hist_country_filter")
+
+        filtered = summary
+        if hist_country != "Todos":
+            filtered = filtered[filtered["country"].astype(str) == hist_country]
+        if search.strip():
+            q = search.strip().lower()
+            text_cols = ["caption", "country", "city", "cover_filename"]
+            mask = filtered[text_cols].astype(str).apply(lambda col: col.str.lower().str.contains(q, na=False))
+            filtered = filtered[mask.any(axis=1)]
+
+        st.caption(f"{len(filtered)} publicación(es) de {len(summary)} en total")
+
+        display = filtered.drop(columns=["cover_path"], errors="ignore").rename(columns={
+            "published_at": "Fecha", "photos": "Fotos", "country": "País", "city": "Ciudad",
+            "year": "Año", "caption": "Caption", "instagram_media_id": "Instagram ID",
+            "permalink": "Abrir", "source": "Origen", "cover_filename": "Portada",
+            "publication_id": "ID publicación",
+        })
+        st.dataframe(
+            display,
+            use_container_width=True,
+            hide_index=True,
+            column_config={"Abrir": st.column_config.LinkColumn("Abrir", display_text="🔗 Ver")},
         )
+
+        st.download_button(
+            "⬇️ Descargar historial por publicación (CSV)",
+            filtered.to_csv(index=False).encode("utf-8-sig"),
+            "instagram_publications_summary.csv",
+            "text/csv",
+        )
+
+        if st.checkbox("Ver detalle por foto", key="hist_show_detail"):
+            show = [c for c in ["published_at","filename","country","city","year","instagram_media_id","source"] if c in hist.columns]
+            st.dataframe(hist[show].sort_values("published_at", ascending=False), use_container_width=True, hide_index=True)
+            st.download_button(
+                "⬇️ Descargar historial detallado (CSV)",
+                hist.to_csv(index=False).encode("utf-8-sig"),
+                "instagram_published_media.csv",
+                "text/csv",
+            )
