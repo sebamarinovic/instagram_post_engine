@@ -78,6 +78,12 @@ generas 3 propuestas de caption con IA, revisas y publicas — con historial par
 no repetir contenido. Las fuentes desactivadas en "⚙️ Fuentes multimedia" no
 aparecen aquí.
 
+Si seleccionas más de 10 elementos, aparece un botón **✨ Seleccionar
+automáticamente las mejores 10**: agrupa fotos casi idénticas (por similitud
+perceptual) y se queda con la de mejor calidad de cada grupo, y reparte el
+resto entre fecha/lugar en vez de tomar simplemente las 10 primeras. Después
+muestra qué quedó fuera y por qué.
+
 ## 5. IA opcional
 Crea una API key en tu proveedor y colócala en `.env`:
 

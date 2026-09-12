@@ -6,7 +6,10 @@ from ai_post_generator import generate_post
 from publisher import config_status, publish_images
 from publication_history import load_history, media_key, record_publication, record_existing_publication
 from config import MEDIA_GEO_CSV, PROFILE_CONTEXT_JSON
+from curation import pick_best
 import media_sources as ms
+
+MAX_CAROUSEL = 10
 
 st.set_page_config(page_title="Instagram Rebuild", layout="wide")
 
@@ -55,19 +58,29 @@ if PROFILE_CONTEXT_JSON.exists():
 
 st.session_state.setdefault("selected_paths", [])
 st.session_state.setdefault("post_draft", None)
+st.session_state.setdefault("last_auto_curation", None)
 
 def key_for(path):
     return hashlib.md5(str(path).encode("utf-8")).hexdigest()
 
-def clear_checkbox_states():
+TRANSIENT_KEY_PREFIXES = ("cb_", "caption_")
+TRANSIENT_KEYS = {"historical_confirm", "confirm_publish"}
+
+def clear_widget_states():
+    """Drop every widget's leftover state from a previous selection/draft —
+    checkboxes, the historical-publication confirm, the edited caption text
+    area and the final publish confirm — so nothing reappears pre-checked
+    or pre-filled after 'Limpiar selección'."""
     for k in list(st.session_state.keys()):
-        if str(k).startswith("cb_"):
+        sk = str(k)
+        if sk.startswith(TRANSIENT_KEY_PREFIXES) or sk in TRANSIENT_KEYS:
             del st.session_state[k]
 
 def clear_selection():
     st.session_state.selected_paths = []
     st.session_state.post_draft = None
-    clear_checkbox_states()
+    st.session_state.last_auto_curation = None
+    clear_widget_states()
 
 def set_selected(path, widget_key):
     current = set(st.session_state.selected_paths)
@@ -192,6 +205,25 @@ selected_already = selected_keys.intersection(published_set)
 
 st.divider()
 st.subheader(f"🎞️ Selección — {len(selected_df)} elementos")
+
+if len(selected_df) > MAX_CAROUSEL:
+    st.warning(f"⚠️ Seleccionaste {len(selected_df)} elementos. Instagram admite hasta {MAX_CAROUSEL} en este flujo.")
+    if st.button("✨ Seleccionar automáticamente las mejores 10", use_container_width=True):
+        kept, discarded = pick_best(selected_df.to_dict("records"), limit=MAX_CAROUSEL)
+        st.session_state.selected_paths = [str(r["path"]) for r in kept]
+        st.session_state.post_draft = None
+        st.session_state.last_auto_curation = discarded
+        st.rerun()
+
+if st.session_state.get("last_auto_curation"):
+    discarded = st.session_state.last_auto_curation
+    with st.expander(f"📋 Se descartaron {len(discarded)} foto(s) para priorizar calidad y diversidad", expanded=True):
+        for d in discarded:
+            st.write(f"- {d.get('filename')} — {d.get('_reason')}")
+        if st.button("Ocultar este resumen"):
+            st.session_state.last_auto_curation = None
+            st.rerun()
+
 with st.expander("🕘 Registrar selección como publicación antigua"):
     st.caption(
         "Úsalo para contenido que ya estaba publicado antes de instalar el historial. "
@@ -255,7 +287,7 @@ with b4: language = st.selectbox("🌐 Idioma", ["Español","Inglés","Español 
 avoid = st.text_input("🚫 Evitar")
 extra = st.text_area("➕ Instrucción extra", height=80)
 
-can_generate = 1 <= len(selected_df) <= 10 and (allow_reuse or not selected_already)
+can_generate = 1 <= len(selected_df) <= MAX_CAROUSEL and (allow_reuse or not selected_already)
 
 if st.button("🤖 Crear 3 propuestas", type="primary", disabled=not can_generate, use_container_width=True):
     ctx = dict(profile_context=profile_context, experience_context=experience_context, intention=intention,
@@ -304,8 +336,8 @@ if draft:
     if selected_already and not allow_reuse:
         st.error("Publicación bloqueada: contiene material ya publicado.")
 
-    confirm = st.checkbox("✅ Confirmo que revisé fotos, orden y texto y quiero publicarlo")
-    ready = not missing and all_images and 1 <= len(ordered) <= 10 and confirm and (allow_reuse or not selected_already)
+    confirm = st.checkbox("✅ Confirmo que revisé fotos, orden y texto y quiero publicarlo", key="confirm_publish")
+    ready = not missing and all_images and 1 <= len(ordered) <= MAX_CAROUSEL and confirm and (allow_reuse or not selected_already)
 
     if st.button("🚀 PUBLICAR AHORA EN INSTAGRAM", type="primary", disabled=not ready, use_container_width=True):
         with st.spinner("Publicando..."):
