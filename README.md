@@ -1,6 +1,6 @@
 # Instagram Rebuild MVP
 
-Objetivo: convertir una fototeca grande de iCloud en experiencias y candidatos publicables sin revisar archivo por archivo.
+Objetivo: convertir una fototeca grande de iCloud en candidatos publicables sin revisar archivo por archivo.
 
 ## 0. Antes de comenzar
 Asegúrate de que las fotos/videos estén descargados localmente ("Mantener siempre en este dispositivo").
@@ -21,35 +21,68 @@ copy .env.example .env
 ```
 
 ## 2. Escanear la biblioteca
-Ejemplo:
 
+**Opción A — desde la app (recomendado):**
+```powershell
+streamlit run app.py
+```
+Abre la página **⚙️ Fuentes multimedia** (menú lateral). Ahí agregas cada carpeta
+de fotos/videos por nombre y ruta, y por cada una puedes: activarla/desactivarla,
+o actualizarla con alguno de estos dos botones:
+
+- **🔄 Actualizar biblioteca** — incremental: detecta archivos nuevos, modificados
+  (mtime cambió) y eliminados desde el último escaneo, y solo reprocesa esos. Si
+  una carpeta ya tenía 3.000 fotos indexadas y agregaste 20, no vuelve a analizar
+  las 3.000.
+- **♻️ Reconstruir índice completo** — reanaliza todo desde cero; úsala solo si
+  sospechas que el índice quedó inconsistente.
+
+No hace falta tocar código ni terminal para cambiar de carpeta o agregar una nueva
+(ej. un backup de Instagram, tu librería de iCloud, un álbum de viajes en otro disco).
+Los datos de fuentes viven en `config/media_sources.json` (no se sube a git: es
+específico de tu equipo — usa `config/media_sources.example.json` como referencia
+del formato).
+
+Cada archivo se identifica además por el SHA-256 de su contenido (`content_hash`),
+no solo por su ruta. Si la misma foto existe en dos carpetas (ej. tu backup de
+Instagram y tu librería de iCloud), el motor de publicación la detecta como una
+sola y solo ofrece la mejor copia — y una foto ya publicada se sigue reconociendo
+como publicada aunque después la muevas o la renombres.
+
+**Opción B — por terminal (una sola carpeta, sin registrar fuente):**
 ```powershell
 python scan_media.py --root "C:\Users\sebam\Pictures\iCloud Photos"
 ```
 
 Con 100k+ archivos puede tardar bastante. Es normal.
-Se genera `data/media_index.csv`.
+Cualquiera de las dos opciones genera/actualiza `data/media_index.csv`.
 
-## 3. Crear experiencias
+## 3. Enriquecer con ubicación
+Desde la misma página **⚙️ Fuentes multimedia**, botón "🌍 Recalcular ubicación",
+o por terminal:
 ```powershell
-python cluster_experiences.py
+python enrich_locations.py
 ```
 
-Criterios iniciales:
-- corte temporal: 72 h
-- salto geográfico: 600 km
+Genera `data/media_geo.csv`: país/ciudad por GPS exacto o por inferencia temporal
+(±12 h) cuando no hay GPS, más `date_source`/`location_source` para filtrar por
+confiabilidad del dato. Corre esto cada vez que agregues fotos nuevas.
 
-Puedes ajustar:
-```powershell
-python cluster_experiences.py --max-gap-hours 96 --jump-km 800
-```
-
-## 4. Abrir dashboard
+## 4. Publicar
 ```powershell
 streamlit run app.py
 ```
 
-Ahí verás las experiencias y los mejores candidatos.
+En la página principal filtras por país/ciudad/año/tipo, seleccionas material,
+generas 3 propuestas de caption con IA, revisas y publicas — con historial para
+no repetir contenido. Las fuentes desactivadas en "⚙️ Fuentes multimedia" no
+aparecen aquí.
+
+Si seleccionas más de 10 elementos, aparece un botón **✨ Seleccionar
+automáticamente las mejores 10**: agrupa fotos casi idénticas (por similitud
+perceptual) y se queda con la de mejor calidad de cada grupo, y reparte el
+resto entre fecha/lugar en vez de tomar simplemente las 10 primeras. Después
+muestra qué quedó fuera y por qué.
 
 ## 5. IA opcional
 Crea una API key en tu proveedor y colócala en `.env`:
@@ -67,7 +100,7 @@ Nunca pongas tokens en el código ni en GitHub.
 
 ```text
 INSTAGRAM_ACCESS_TOKEN=...
-INSTAGRAM_USER_ID=27816318048070268
+INSTAGRAM_USER_ID=...
 ```
 
 ## 7. AWS S3
@@ -82,9 +115,49 @@ AWS_DEFAULT_REGION=
 S3_BUCKET=
 ```
 
+## 8. Modo prueba (DRY_RUN)
+```text
+DRY_RUN=true
+```
+Con `DRY_RUN=true` (el valor por defecto en `.env.example`), el botón de
+publicar se convierte en "🧪 SIMULAR PUBLICACIÓN": no se llama a la API de
+Instagram ni se sube nada a S3, no hace falta tener credenciales configuradas,
+y el resultado simulado igual se registra en el historial (marcado con
+`source=dry_run`) para que puedas probar todo el flujo — selección, límite de
+10, generación de caption, "ya publicada" — sin publicar nada de verdad.
+Pon `DRY_RUN=false` solo cuando quieras publicar en serio.
+
+## 9. Historial de publicaciones
+En la app, el expander **📚 Historial de publicaciones** agrupa las fotos por
+publicación (una fila por post, no por foto): fecha, cantidad de fotos,
+país/ciudad, caption, ID de Instagram y un link para abrir el post real
+(cuando existe). Se puede buscar por texto y filtrar por país, exportar a
+CSV, y hay un detalle por foto individual si lo necesitas.
+
+## 10. Base de datos (opcional, todavía no activa)
+Hoy todo vive en CSV/JSON bajo `data/` y `config/` — la app sigue leyendo y
+escribiendo esos archivos exclusivamente. Hay un esquema SQLite listo
+(`db.py`: tablas `media`, `sources`, `publications`, `publication_media`,
+`settings`) y un script de migración que puedes correr cuando quieras
+probarlo, sin ningún riesgo:
+
+```powershell
+python migrate_to_sqlite.py
+```
+
+Esto: hace backup de tus CSV/JSON actuales en
+`data/backup_pre_sqlite_<fecha>/`, crea/actualiza `data/instagram_rebuild.db`,
+y valida la migración (conteos + spot-check de filas al azar) imprimiendo un
+reporte. **No borra ni modifica los archivos originales**, y la app no lee de
+esta base de datos todavía — es un paso separado y deliberado, para cuando
+decidas que vale la pena el cambio (por ejemplo si tu fototeca crece lo
+suficiente como para que leer el CSV completo en cada interacción de
+Streamlit empiece a notarse). Puedes correrlo las veces que quieras: es
+idempotente, no duplica filas.
+
 ## Estrategia recomendada
 1. PC filtra 100k+ archivos.
-2. Cada experiencia queda con ~20-30 candidatos.
+2. Filtras por país/ciudad/año hasta llegar a un puñado de candidatos.
 3. Tú marcas 5-10.
 4. IA genera orden, caption y concepto.
 5. Tú apruebas.

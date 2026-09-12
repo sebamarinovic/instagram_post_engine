@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import math
 import os
 import subprocess
@@ -12,7 +13,7 @@ import pandas as pd
 from PIL import Image, ExifTags, ImageOps
 from pillow_heif import register_heif_opener
 
-from config import MEDIA_CSV, THUMB_DIR
+from config import MEDIA_INDEX_CSV, THUMB_DIR
 
 register_heif_opener()
 
@@ -152,10 +153,23 @@ def video_probe(path):
         row["error"] = "ffprobe/ffmpeg no disponible o video no descargado: " + str(e)[:200]
         return row
 
-def scan(root):
+def find_media_files(root):
     root = Path(root)
-    paths = [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (IMAGE_EXTS | VIDEO_EXTS)]
-    print(f"Encontrados {len(paths):,} archivos multimedia.")
+    return [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in (IMAGE_EXTS | VIDEO_EXTS)]
+
+def file_content_hash(path, chunk_size=1024 * 1024):
+    """SHA-256 of the file's bytes — identifies a photo/video by content, not by path,
+    so the same file kept in two folders (or moved/renamed) is recognized as one item."""
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(chunk_size), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return None
+
+def build_index(paths, source_id=None, source_name=None, source_path=None):
     rows = []
     for i,p in enumerate(paths,1):
         ext = p.suffix.lower()
@@ -166,6 +180,10 @@ def scan(root):
             "media_type": "image" if ext in IMAGE_EXTS else "video",
             "size_mb": round(p.stat().st_size / 1024 / 1024, 3),
             "filesystem_mtime": datetime.fromtimestamp(p.stat().st_mtime).isoformat(sep=" "),
+            "content_hash": file_content_hash(p),
+            "source_id": source_id,
+            "source_name": source_name,
+            "source_path": source_path,
         }
         meta = image_metrics(p) if ext in IMAGE_EXTS else video_probe(p)
         base.update(meta)
@@ -174,9 +192,99 @@ def scan(root):
         rows.append(base)
         if i % 250 == 0:
             print(f"{i:,}/{len(paths):,}")
-    df = pd.DataFrame(rows)
-    df.to_csv(MEDIA_CSV, index=False)
-    print(f"Índice guardado en {MEDIA_CSV}")
+    return pd.DataFrame(rows)
+
+def load_index():
+    if MEDIA_INDEX_CSV.exists():
+        return pd.read_csv(MEDIA_INDEX_CSV)
+    return pd.DataFrame()
+
+def merge_source_into_index(df_new, source_id, replace):
+    """Merge a freshly scanned source into the on-disk index.
+
+    replace=True drops any previous rows for this source_id before adding
+    df_new (a full rescan). replace=False only guards against re-adding a
+    path that's already indexed (used for incremental "new files" scans,
+    where df_new is expected to already exclude known paths).
+    """
+    existing = load_index()
+    if existing.empty:
+        merged = df_new
+    else:
+        if replace and "source_id" in existing.columns:
+            existing = existing[existing["source_id"] != source_id]
+        if not replace:
+            known_paths = set(existing["path"].astype(str))
+            df_new = df_new[~df_new["path"].astype(str).isin(known_paths)]
+        merged = pd.concat([existing, df_new], ignore_index=True)
+    merged.to_csv(MEDIA_INDEX_CSV, index=False)
+    return merged
+
+def scan_source_incremental(source_id, source_name, source_path):
+    """Update one source's rows without re-analyzing files that haven't changed.
+
+    Compares what's on disk now against what's in the index for this source:
+    - new: on disk, not in the index -> scanned and added.
+    - modified: in the index, but filesystem_mtime differs from what's stored
+      -> re-scanned (metrics, thumbnail and content_hash recomputed) and its
+      old row replaced.
+    - removed: in the index, no longer on disk -> row dropped.
+    - unchanged: left exactly as they are, no re-analysis at all.
+
+    Returns a stats dict: {"new": n, "modified": n, "removed": n, "unchanged": n}.
+    """
+    on_disk = find_media_files(source_path)
+    on_disk_by_path = {str(p): p for p in on_disk}
+
+    existing = load_index()
+    if not existing.empty and "source_id" in existing.columns:
+        source_rows = existing[existing["source_id"] == source_id]
+        other_rows = existing[existing["source_id"] != source_id]
+    else:
+        source_rows = existing.iloc[0:0]
+        other_rows = existing
+
+    known_mtime = {
+        str(r["path"]): r.get("filesystem_mtime") for _, r in source_rows.iterrows()
+    }
+
+    new_paths, modified_paths = [], []
+    unchanged = 0
+    for path_str, p in on_disk_by_path.items():
+        if path_str not in known_mtime:
+            new_paths.append(p)
+            continue
+        current_mtime = datetime.fromtimestamp(p.stat().st_mtime).isoformat(sep=" ")
+        if str(known_mtime[path_str]) != current_mtime:
+            modified_paths.append(p)
+        else:
+            unchanged += 1
+
+    removed_paths = [pth for pth in known_mtime if pth not in on_disk_by_path]
+
+    to_rescan = new_paths + modified_paths
+    rescanned = build_index(to_rescan, source_id, source_name, source_path) if to_rescan else pd.DataFrame()
+
+    stale = set(removed_paths) | {str(p) for p in modified_paths}
+    kept_rows = source_rows[~source_rows["path"].astype(str).isin(stale)] if not source_rows.empty else source_rows
+
+    merged = pd.concat([other_rows, kept_rows, rescanned], ignore_index=True)
+    merged.to_csv(MEDIA_INDEX_CSV, index=False)
+
+    return {
+        "new": len(new_paths),
+        "modified": len(modified_paths),
+        "removed": len(removed_paths),
+        "unchanged": unchanged,
+    }
+
+def scan(root):
+    """CLI entry point: full scan of one folder, overwrites the whole index."""
+    paths = find_media_files(root)
+    print(f"Encontrados {len(paths):,} archivos multimedia.")
+    df = build_index(paths, source_path=str(Path(root)))
+    df.to_csv(MEDIA_INDEX_CSV, index=False)
+    print(f"Índice guardado en {MEDIA_INDEX_CSV}")
     return df
 
 if __name__ == "__main__":

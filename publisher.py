@@ -1,86 +1,114 @@
+import hashlib
 import mimetypes
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
-
 import boto3
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
-
 BASE = "https://graph.instagram.com"
 
-def ig_token():
-    t = os.getenv("INSTAGRAM_ACCESS_TOKEN")
-    if not t: raise RuntimeError("Falta INSTAGRAM_ACCESS_TOKEN")
-    return t
+def _is_dry_run():
+    return os.getenv("DRY_RUN", "false").strip().lower() in {"1", "true", "yes", "y"}
 
-def ig_id():
-    x = os.getenv("INSTAGRAM_USER_ID")
-    if not x: raise RuntimeError("Falta INSTAGRAM_USER_ID")
-    return x
+DRY_RUN = _is_dry_run()
 
-def s3_client():
-    return boto3.client("s3")
+def config_status():
+    return {
+        "INSTAGRAM_ACCESS_TOKEN": bool(os.getenv("INSTAGRAM_ACCESS_TOKEN")),
+        "INSTAGRAM_USER_ID": bool(os.getenv("INSTAGRAM_USER_ID")),
+        "S3_BUCKET": bool(os.getenv("S3_BUCKET")),
+    }
+
+def _token():
+    v=os.getenv("INSTAGRAM_ACCESS_TOKEN")
+    if not v: raise RuntimeError("Falta INSTAGRAM_ACCESS_TOKEN")
+    return v
+
+def _ig_id():
+    v=os.getenv("INSTAGRAM_USER_ID")
+    if not v: raise RuntimeError("Falta INSTAGRAM_USER_ID")
+    return v
+
+def _bucket():
+    v=os.getenv("S3_BUCKET")
+    if not v: raise RuntimeError("Falta S3_BUCKET")
+    return v
 
 def upload_and_presign(path, expires=7200):
-    bucket = os.getenv("S3_BUCKET")
-    if not bucket: raise RuntimeError("Falta S3_BUCKET")
-    prefix = os.getenv("S3_PREFIX", "instagram-rebuild").strip("/")
-    path = Path(path)
-    key = f"{prefix}/{int(time.time())}_{path.name}"
-    ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    s3 = s3_client()
-    s3.upload_file(str(path), bucket, key, ExtraArgs={"ContentType": ctype})
-    return s3.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": bucket, "Key": key},
-        ExpiresIn=expires
-    )
+    path=Path(path)
+    prefix=os.getenv("S3_PREFIX","instagram-rebuild").strip("/")
+    key=f"{prefix}/{int(time.time())}_{path.name}"
+    ctype=mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    s3=boto3.client("s3")
+    s3.upload_file(str(path), _bucket(), key, ExtraArgs={"ContentType":ctype})
+    return s3.generate_presigned_url("get_object", Params={"Bucket":_bucket(),"Key":key}, ExpiresIn=expires)
 
-def create_image_container(image_url, caption=None, is_carousel_item=False):
-    data = {
-        "image_url": image_url,
-        "access_token": ig_token(),
-    }
-    if caption is not None:
-        data["caption"] = caption
-    if is_carousel_item:
-        data["is_carousel_item"] = "true"
-    r = requests.post(f"{BASE}/{ig_id()}/media", data=data, timeout=60)
-    r.raise_for_status()
-    return r.json()["id"]
-
-def publish_container(creation_id):
-    r = requests.post(
-        f"{BASE}/{ig_id()}/media_publish",
-        data={"creation_id": creation_id, "access_token": ig_token()},
-        timeout=60
-    )
-    r.raise_for_status()
+def _post(endpoint,data):
+    r=requests.post(endpoint,data=data,timeout=90)
+    if not r.ok:
+        raise RuntimeError(f"Instagram API {r.status_code}: {r.text}")
     return r.json()
 
+def fetch_permalink(media_id):
+    """Best-effort lookup of the public URL for a just-published media_id.
+    media_publish only returns the id, not the permalink — a separate call
+    is needed, and it's not critical enough to fail the publish over."""
+    if not media_id:
+        return None
+    try:
+        r = requests.get(
+            f"{BASE}/{media_id}",
+            params={"fields": "permalink", "access_token": _token()},
+            timeout=30,
+        )
+        return r.json().get("permalink") if r.ok else None
+    except Exception:
+        return None
+
 def publish_single(local_path, caption):
-    url = upload_and_presign(local_path)
-    cid = create_image_container(url, caption=caption)
-    return publish_container(cid)
+    url=upload_and_presign(local_path)
+    cid=_post(f"{BASE}/{_ig_id()}/media",{"image_url":url,"caption":caption,"access_token":_token()})["id"]
+    time.sleep(2)
+    result = _post(f"{BASE}/{_ig_id()}/media_publish",{"creation_id":cid,"access_token":_token()})
+    result["permalink"] = fetch_permalink(result.get("id"))
+    return result
 
 def publish_carousel(local_paths, caption):
     if not 2 <= len(local_paths) <= 10:
-        raise ValueError("Carrusel: usa entre 2 y 10 imágenes.")
-    child_ids = []
+        raise ValueError("Carrusel: entre 2 y 10 imágenes.")
+    children=[]
     for p in local_paths:
-        url = upload_and_presign(p)
-        child_ids.append(create_image_container(url, is_carousel_item=True))
+        url=upload_and_presign(p)
+        cid=_post(f"{BASE}/{_ig_id()}/media",{"image_url":url,"is_carousel_item":"true","access_token":_token()})["id"]
+        children.append(cid)
+    time.sleep(3)
+    parent=_post(
+        f"{BASE}/{_ig_id()}/media",
+        {"media_type":"CAROUSEL","children":",".join(children),"caption":caption,"access_token":_token()}
+    )["id"]
+    time.sleep(3)
+    result = _post(f"{BASE}/{_ig_id()}/media_publish",{"creation_id":parent,"access_token":_token()})
+    result["permalink"] = fetch_permalink(result.get("id"))
+    return result
 
-    data = {
-        "media_type": "CAROUSEL",
-        "children": ",".join(child_ids),
-        "caption": caption,
-        "access_token": ig_token()
+def _simulate_publish(local_paths, caption):
+    fingerprint = hashlib.md5((caption + "".join(local_paths)).encode("utf-8")).hexdigest()[:10]
+    return {
+        "dry_run": True,
+        "id": f"DRYRUN-{fingerprint}",
+        "media_type": "CAROUSEL" if len(local_paths) > 1 else "IMAGE",
+        "children": len(local_paths),
+        "note": "Simulado — DRY_RUN activo, no se llamó a la API de Instagram ni se subió nada a S3.",
+        "simulated_at": datetime.now(timezone.utc).isoformat(),
     }
-    r = requests.post(f"{BASE}/{ig_id()}/media", data=data, timeout=60)
-    r.raise_for_status()
-    parent = r.json()["id"]
-    return publish_container(parent)
+
+def publish_images(local_paths, caption):
+    if _is_dry_run():
+        return _simulate_publish(local_paths, caption)
+    if len(local_paths)==1:
+        return publish_single(local_paths[0],caption)
+    return publish_carousel(local_paths,caption)

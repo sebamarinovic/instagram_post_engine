@@ -2,6 +2,8 @@ import argparse
 import pandas as pd
 import reverse_geocoder as rg
 
+from config import MEDIA_INDEX_CSV, MEDIA_GEO_CSV
+
 COUNTRY_NAMES = {
     "CL":"Chile","HR":"Croacia","JP":"Japón","EG":"Egipto","TR":"Turquía","BR":"Brasil",
     "BO":"Bolivia","AR":"Argentina","PE":"Perú","US":"Estados Unidos","MX":"México",
@@ -84,8 +86,8 @@ def main(csv_path, out_path, infer_hours=12):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", default="data/media_index.csv")
-    ap.add_argument("--output", default="data/media_geo.csv")
+    ap.add_argument("--input", default=str(MEDIA_INDEX_CSV))
+    ap.add_argument("--output", default=str(MEDIA_GEO_CSV))
     ap.add_argument("--infer-hours", type=int, default=12)
     args = ap.parse_args()
     main(args.input, args.output, args.infer_hours)
