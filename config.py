@@ -4,8 +4,9 @@ PROJECT_DIR = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_DIR / "data"
 THUMB_DIR = DATA_DIR / "thumbs"
 CONFIG_DIR = PROJECT_DIR / "config"
+UPLOADS_DIR = DATA_DIR / "uploads"
 
-for p in (DATA_DIR, THUMB_DIR, CONFIG_DIR):
+for p in (DATA_DIR, THUMB_DIR, CONFIG_DIR, UPLOADS_DIR):
     p.mkdir(parents=True, exist_ok=True)
 
 MEDIA_INDEX_CSV = DATA_DIR / "media_index.csv"

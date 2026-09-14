@@ -69,3 +69,13 @@ def update_scan_stats(source_id, item_count):
             s["last_scanned_at"] = datetime.now(timezone.utc).isoformat()
             s["last_scan_items"] = item_count
     _save_raw(data)
+
+def ensure_uploads_source(path, name="📱 Subidas desde el celular"):
+    """Find (or create, on first use) the local source that backs
+    mobile-uploaded files. Uploads are saved to `path` as plain files on
+    disk, so this is just a regular source — nothing S3/cloud-specific."""
+    path = str(path)
+    for s in list_sources():
+        if s.get("path") == path:
+            return s["id"]
+    return add_source(name, path)

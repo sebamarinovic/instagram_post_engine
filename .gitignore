@@ -17,6 +17,7 @@ data/media_geo.csv
 data/experiences.csv
 data/published_media.csv
 data/drafts/
+data/uploads/
 data/instagram_rebuild.db
 data/backup_pre_sqlite_*/
 

@@ -1,0 +1,4 @@
+# Non-secret Streamlit settings — safe to commit (unlike secrets.toml).
+[server]
+# Phone videos can be large; default is 200 MB.
+maxUploadSize = 1024

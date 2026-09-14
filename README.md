@@ -195,6 +195,24 @@ Debería pedirte iniciar sesión con Google antes de mostrar cualquier cosa. Si
 entras con una cuenta que no está en `ALLOWED_GOOGLE_EMAILS`, la app te lo
 dice y no te deja pasar.
 
+## 12. Subir fotos desde el celular (Etapa Cloud B)
+Página **📤 Subir desde el celular** (menú lateral): elige fotos/videos desde
+la galería de tu teléfono y se suben directo al servidor donde corre la app —
+no hace falta S3 ni ninguna configuración extra para esto. Quedan guardadas
+en `data/uploads/` (una carpeta más, gestionada como cualquier otra fuente:
+aparece también en **⚙️ Fuentes multimedia**) y se procesan igual que el
+resto: EXIF, GPS, miniatura, `content_hash`. Si subes la misma foto dos
+veces no se duplica ni se reprocesa.
+
+Después de subir, toca **🌍 Actualizar ubicación** (ahí mismo, o en
+Fuentes multimedia) para que aparezcan con país/ciudad en el motor
+principal. El límite de subida por archivo es 1 GB (`.streamlit/config.toml`
+— súbelo si necesitas videos más pesados).
+
+Esto **no mueve tu fototeca existente a la nube** — tus carpetas locales
+(iCloud, backups) siguen tal cual. Migrar todo lo demás a S3 es la etapa
+siguiente (Etapa Cloud D), separada de esta.
+
 ## Estrategia recomendada
 1. PC filtra 100k+ archivos.
 2. Filtras por país/ciudad/año hasta llegar a un puñado de candidatos.
