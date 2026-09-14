@@ -1,0 +1,7 @@
+# Copy to "Caddyfile" (no extension) and replace with your real domain.
+# Caddy handles HTTPS automatically (Let's Encrypt) once this domain's DNS
+# A record points at this server's public IP and ports 80/443 are open.
+
+tu-dominio.com {
+    reverse_proxy app:8501
+}

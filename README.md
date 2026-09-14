@@ -213,6 +213,56 @@ Esto **no mueve tu fototeca existente a la nube** — tus carpetas locales
 (iCloud, backups) siguen tal cual. Migrar todo lo demás a S3 es la etapa
 siguiente (Etapa Cloud D), separada de esta.
 
+## 13. Desplegar en un servidor (Etapa Cloud C)
+Todo lo anterior corre en tu PC. Para que la app tenga una URL de verdad
+(accesible desde el celular en cualquier red, no solo la de tu casa),
+se empaqueta con Docker y se levanta en una instancia de AWS.
+
+**Importante sobre el login de Google**: fuera de `localhost`, Google exige
+que el `redirect_uri` sea HTTPS. Por eso el despliegue incluye
+[Caddy](https://caddyserver.com/) como proxy — consigue el certificado HTTPS
+automáticamente (Let's Encrypt) apenas tu dominio apunte al servidor. Sin
+dominio + HTTPS, el login no va a funcionar en producción.
+
+**1. Crear el servidor** (recomendado: [Lightsail](https://lightsail.aws.amazon.com/),
+más simple que EC2 para este caso):
+- Instancia Ubuntu 22.04+, el plan más chico alcanza (esto no es pesado en CPU).
+- En el firewall de la instancia, abre los puertos **80**, **443** y **22**.
+- Anota la IP pública fija que te asigna.
+
+**2. Apuntar tu dominio**: crea un registro **A** apuntando tu dominio (o
+subdominio, ej. `fotos.tudominio.com`) a esa IP pública. Espera a que
+propague (unos minutos a un par de horas).
+
+**3. Preparar el servidor** (por SSH):
+```bash
+sudo apt update && sudo apt install -y git
+git clone https://github.com/sebamarinovic/instagram_post_engine.git
+cd instagram_post_engine
+git checkout claude/instagram-rebuild-refactor-yhaanw   # o main, una vez mergeado el PR
+
+cp .env.example .env                                   # completa con tus credenciales reales
+mkdir -p .streamlit
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml   # completa con tu OAuth client de la Etapa A
+cp Caddyfile.example Caddyfile                          # cambia "tu-dominio.com" por el real
+
+./deploy.sh
+```
+`deploy.sh` instala Docker si falta, valida que los 3 archivos anteriores
+existan, y levanta todo (`docker compose up -d --build`). Con Docker ya
+instalado, un despliegue nuevo es un solo comando: `./deploy.sh`.
+
+**4. Verificar**: entra a `https://tu-dominio.com` desde el celular. Debería
+pedirte login de Google (candado válido, sin advertencias del navegador).
+
+**Actualizar la app** (tras un cambio de código): `git pull && ./deploy.sh`
+(reconstruye solo lo que cambió). Tus fotos, índice y config **no se
+pierden** entre despliegues — `data/` y `config/` están montados como
+volúmenes del host, no viven dentro del contenedor.
+
+**Costo aproximado**: instancia Lightsail chica desde US$5/mes. El resto
+(dominio, Caddy) no tiene costo adicional — Let's Encrypt es gratis.
+
 ## Estrategia recomendada
 1. PC filtra 100k+ archivos.
 2. Filtras por país/ciudad/año hasta llegar a un puñado de candidatos.
