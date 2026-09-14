@@ -6,8 +6,12 @@ import media_sources as ms
 import enrich_locations
 from scan_media import find_media_files, merge_source_into_index, build_index, load_index, scan_source_incremental
 from config import MEDIA_GEO_CSV, MEDIA_INDEX_CSV
+import auth
 
 st.set_page_config(page_title="Fuentes multimedia", layout="wide")
+auth.require_login()
+auth.sidebar_user_badge()
+
 st.title("⚙️ Fuentes multimedia")
 st.caption("Agrega, activa/desactiva o reescanea carpetas de fotos y videos sin tocar código.")
 

@@ -155,6 +155,46 @@ suficiente como para que leer el CSV completo en cada interacción de
 Streamlit empiece a notarse). Puedes correrlo las veces que quieras: es
 idempotente, no duplica filas.
 
+## 11. Login con Google (Etapa Cloud A)
+La app ahora exige iniciar sesión con Google antes de mostrar nada — pensado
+para cuando esté accesible por internet, no solo en tu PC. Solo las cuentas
+que pongas en `ALLOWED_GOOGLE_EMAILS` (en `.env`) pueden entrar, aunque el
+login con Google sea exitoso.
+
+**Crear el cliente OAuth (una sola vez), en [Google Cloud Console](https://console.cloud.google.com/):**
+1. Crea un proyecto nuevo (o usa uno existente).
+2. **APIs & Services → OAuth consent screen**: tipo "External", completa
+   nombre de la app y tu correo. En "Test users" (mientras la app no esté
+   verificada por Google) agrega tu propio correo — si no, Google no te
+   deja iniciar sesión ni a ti mismo.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
+   tipo "Web application".
+4. En **Authorized redirect URIs** agrega, por ahora:
+   - `http://localhost:8501/oauth2callback` (para probar en tu PC)
+   - más adelante, cuando esté desplegada: `https://tu-dominio.com/oauth2callback`
+5. Guarda el **Client ID** y el **Client secret** que te muestra.
+
+**Configurar la app localmente:**
+```powershell
+mkdir .streamlit
+copy .streamlit\secrets.toml.example .streamlit\secrets.toml
+```
+Edita `.streamlit/secrets.toml` con el Client ID/secret del paso anterior, y
+genera un `cookie_secret` random:
+```powershell
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+En `.env`, agrega tu correo a `ALLOWED_GOOGLE_EMAILS` (el mismo que agregaste
+como "test user" en el paso 2). `.streamlit/secrets.toml` **nunca se sube a
+git** (ya está en `.gitignore`).
+
+```powershell
+streamlit run app.py
+```
+Debería pedirte iniciar sesión con Google antes de mostrar cualquier cosa. Si
+entras con una cuenta que no está en `ALLOWED_GOOGLE_EMAILS`, la app te lo
+dice y no te deja pasar.
+
 ## Estrategia recomendada
 1. PC filtra 100k+ archivos.
 2. Filtras por país/ciudad/año hasta llegar a un puñado de candidatos.

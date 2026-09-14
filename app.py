@@ -8,10 +8,13 @@ from publication_history import load_history, media_key, record_publication, rec
 from config import MEDIA_GEO_CSV, PROFILE_CONTEXT_JSON
 from curation import pick_best
 import media_sources as ms
+import auth
 
 MAX_CAROUSEL = 10
 
 st.set_page_config(page_title="Instagram Rebuild", layout="wide")
+auth.require_login()
+auth.sidebar_user_badge()
 
 if DRY_RUN:
     st.info("🧪 **DRY_RUN activo** — las publicaciones se simulan. No se llama a la API de Instagram ni se sube nada a S3.")
