@@ -5,6 +5,7 @@ import streamlit as st
 from ai_post_generator import generate_post
 from publisher import config_status, publish_images, DRY_RUN
 from publication_history import load_history, media_key, record_publication, record_existing_publication, summarize_publications
+from instagram_import import import_existing_publications
 from config import MEDIA_GEO_CSV, PROFILE_CONTEXT_JSON
 from curation import pick_best
 from s3_library import is_s3_uri, presigned_url
@@ -285,6 +286,32 @@ with st.expander("🕘 Registrar selección como publicación antigua"):
         )
 
         st.rerun()
+
+with st.expander("🔄 Importar publicaciones existentes desde Instagram (automático)"):
+    st.caption(
+        "Compara tus posts reales de Instagram contra la librería por similitud visual "
+        "(no exige el archivo exacto — Instagram recomprime al subir) y marca como ya "
+        "publicadas las fotos que reconozca, sin registrarlas una por una a mano."
+    )
+    if st.button("🔍 Buscar e importar automáticamente", use_container_width=True):
+        progress = st.progress(0.0, text="Descargando publicaciones de Instagram...")
+        try:
+            stats = import_existing_publications(
+                progress=lambda i, n: progress.progress(i / n, text=f"Comparando {i}/{n}...")
+            )
+        except Exception as e:
+            progress.empty()
+            st.error(f"No se pudo importar: {e}")
+        else:
+            progress.empty()
+            if stats.get("error"):
+                st.error(stats["error"])
+            else:
+                st.success(
+                    f"✅ Revisadas {stats['checked']} foto(s) de {stats['posts']} publicación(es) de Instagram — "
+                    f"{stats['matched']} coincidencia(s) marcadas como ya publicadas."
+                )
+                st.rerun()
 
 if selected_already and not allow_reuse:
     st.warning("Hay material ya publicado en la selección. Limpia selección o activa 'Permitir reutilizar publicadas'.")
