@@ -49,20 +49,26 @@ if "source_id" in df.columns:
 
 df, duplicate_count = dedupe_by_content(df)
 
-DEFAULT_PROFILE = """Sebastián. Chileno-croata 🇨🇱🇭🇷. Ingeniero Civil Industrial, pero acá no hablo de trabajo.
+DEFAULT_PROFILE = """Sebastián Marinović. "Ingeniero viajero" — chileno-croata 🇨🇱🇭🇷.
+Bio actual del perfil: Data Science · IA · Metalurgia | Explorando el mundo y
+la tecnología | Founder de un proyecto tecnológico.
 
-Este Instagram construye una identidad en torno a 4 pilares: viajes, tecnología,
-fotografía y experiencias. Cada publicación aporta a al menos uno de esos ejes —
-un lugar nuevo, una toma con drone/FPV, un detalle técnico o una historia vivida
-que valga la pena contar.
+La cuenta ya tiene una identidad definida en 4 pilares: viajes, tecnología,
+fotografía y experiencias (Grecia, Croacia, Isla de Pascua, Sudáfrica, Japón,
+entre otros). El objetivo ahora es escalarla — crecer como creador de
+contenido en ese nicho, sin perder la voz personal y reflexiva que ya tiene.
 
-Objetivo: crecer como creador de contenido en ese nicho (viajes + tech + foto),
-con voz auténtica y cercana, no corporativa ni publicitaria. Prioriza historias
-reales y detalles concretos por sobre frases genéricas o inspiracionales.
+Estilo de caption ya establecido (seguirlo, no reinventarlo):
+- Primera línea: "📍 Ubicación: {lugar}, {país}".
+- Párrafo corto (2-4 frases): detalles concretos del lugar, cierra con una
+  reflexión personal breve ("uno de mis top 5", "muy distinto a lo que
+  esperaba") — nunca una moraleja ni frase motivacional genérica.
+- 2-3 emojis relevantes integrados en el texto.
+- Hashtags fijos de marca: #TravelMemories #POV, más 2-3 específicos del
+  lugar (ej. #Kyoto #Japan).
 
-Hobbies que alimentan el contenido: viajar, fotografía, drone/FPV, tecnología,
-descubrir lugares nuevos. Emprendedor de un proyecto tecnológico (contexto de
-voz, no tema obligatorio)."""
+Tono cercano, reflexivo y auténtico — nunca corporativo, de CV ni publicitario.
+Profesión, raíces y emprendimiento son contexto de voz, no tema obligatorio."""
 
 profile_saved = DEFAULT_PROFILE
 if PROFILE_CONTEXT_JSON.exists():

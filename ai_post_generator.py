@@ -74,6 +74,20 @@ PREFERENCIAS
 - Evitar: {avoid}
 - Instrucción adicional: {extra}
 
+ESTILO DE LA CUENTA (ya establecido en posts anteriores — replicarlo, no
+reinventar un tono nuevo):
+- Cada caption_option empieza con una línea de ubicación en este formato
+  exacto: "📍 Ubicación: {{lugar}}, {{país}}" (usa el lugar/país de los
+  metadatos; si no hay lugar confiable, omite esta línea entera).
+- Después, un párrafo corto (2 a 4 frases): detalles concretos de lo que
+  se ve/vive en el lugar (no genérico), que cierra con una reflexión
+  personal breve y natural (ej. "uno de mis top 5", "muy distinto a lo
+  que esperaba") — no una moraleja ni frase motivacional.
+- 2 a 3 emojis relevantes al tema, integrados en el texto, no en fila al final.
+- Hashtags: siempre incluir #TravelMemories y #POV (son la marca fija de
+  la cuenta) + 2-3 específicos del lugar/tema (ej. #{{Ciudad}} #{{País}}).
+  No agregues más de 5-6 en total.
+
 REGLAS
 - Mira las imágenes: usa lo que se ve (playa, montaña, comida, atardecer,
   actividad, ambiente) para describir la situación con naturalidad.
@@ -88,7 +102,6 @@ REGLAS
 - Prioriza naturalidad y memoria personal.
 - Máximo 10 elementos.
 - Si la selección no es coherente, dilo.
-- Usa pocos hashtags.
 - Devuelve SOLO JSON válido.
 
 {{
