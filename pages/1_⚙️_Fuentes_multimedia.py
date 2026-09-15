@@ -1,6 +1,8 @@
+import os
 from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
 
 import media_sources as ms
 import enrich_locations
@@ -9,12 +11,24 @@ from scan_media import find_media_files, merge_source_into_index, build_index, l
 from config import MEDIA_GEO_CSV, MEDIA_INDEX_CSV
 import auth
 
+load_dotenv()
+
 st.set_page_config(page_title="Fuentes multimedia", layout="wide")
 auth.require_login()
 auth.sidebar_user_badge()
 
 st.title("⚙️ Fuentes multimedia")
 st.caption("Agrega, activa/desactiva o reescanea carpetas de fotos y videos sin tocar código.")
+
+# The S3 source (Etapa Cloud D) isn't something a user adds by hand like a
+# local folder — it's implied by S3_BUCKET being configured, and its
+# content comes from migrate_to_s3.py, run separately on whatever machine
+# holds the full library. Register it once, automatically, the first time
+# this page loads with a bucket configured.
+_s3_bucket = os.getenv("S3_BUCKET")
+if _s3_bucket and not any(s3_library.is_s3_uri(s.get("path")) for s in ms.list_sources()):
+    ms.ensure_s3_source(_s3_bucket)
+    st.rerun()
 
 index_df = load_index()
 
