@@ -3,16 +3,27 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+import boto3
 from dotenv import load_dotenv
 from openai import OpenAI
+
+from s3_library import is_s3_uri, parse_s3_uri
 
 load_dotenv()
 
 def _data_url(path):
-    path = Path(path)
-    mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
-    data = base64.b64encode(path.read_bytes()).decode("utf-8")
+    path_str = str(path)
+    mime = mimetypes.guess_type(path_str)[0] or "image/jpeg"
+    if is_s3_uri(path_str):
+        bucket, key = parse_s3_uri(path_str)
+        raw = boto3.client("s3").get_object(Bucket=bucket, Key=key)["Body"].read()
+    else:
+        raw = Path(path_str).read_bytes()
+    data = base64.b64encode(raw).decode("utf-8")
     return f"data:{mime};base64,{data}"
+
+def _thumb_available(thumb):
+    return isinstance(thumb, str) and (is_s3_uri(thumb) or Path(thumb).exists())
 
 def _clean_json(text):
     text = text.strip()
@@ -64,7 +75,10 @@ PREFERENCIAS
 - Instrucción adicional: {extra}
 
 REGLAS
-- No inventes hechos, relaciones, emociones, fechas ni lugares.
+- Mira las imágenes: usa lo que se ve (playa, montaña, comida, atardecer,
+  actividad, ambiente) para describir la situación con naturalidad.
+- No inventes hechos, relaciones, emociones, fechas ni lugares que no
+  respalden ni la imagen ni los metadatos.
 - Usa lugares y fechas solo si los metadatos los respaldan.
 - Si el GPS es inferido, no presentes el lugar como exacto.
 - No identifiques personas.
@@ -115,7 +129,7 @@ REGLAS
         }
         content.append({"type":"input_text","text":f"ELEMENTO {i} METADATOS: {json.dumps(meta, ensure_ascii=False)}"})
         thumb = row.get("thumb_path")
-        if thumb and Path(str(thumb)).exists() and row.get("media_type") == "image":
+        if _thumb_available(thumb) and row.get("media_type") == "image":
             content.append({"type":"input_image","image_url":_data_url(thumb),"detail":"low"})
 
     response = client.responses.create(

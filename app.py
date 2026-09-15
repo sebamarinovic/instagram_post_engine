@@ -298,11 +298,30 @@ extra = st.text_area("➕ Instrucción extra", height=80)
 
 can_generate = 1 <= len(selected_df) <= MAX_CAROUSEL and (allow_reuse or not selected_already)
 
-if st.button("🤖 Crear 3 propuestas", type="primary", disabled=not can_generate, use_container_width=True):
-    ctx = dict(profile_context=profile_context, experience_context=experience_context, intention=intention,
-               tone=tone, length=length, emoji_level=emoji_level, language=language, avoid=avoid, extra=extra)
-    with st.spinner("Creando propuestas..."):
+ctx = dict(profile_context=profile_context, experience_context=experience_context, intention=intention,
+           tone=tone, length=length, emoji_level=emoji_level, language=language, avoid=avoid, extra=extra)
+
+def _run_generation():
+    try:
         st.session_state.post_draft = generate_post(selected_df.to_dict("records"), ctx)
+    except Exception as e:
+        st.error(f"No se pudieron generar las propuestas: {e}")
+        st.session_state.post_draft = False
+
+# Generación automática: apenas hay una selección válida sin propuestas
+# todavía, se genera sola (sin esperar un click). Cambiar la selección
+# (o el contexto de arriba y "Regenerar") vuelve a disparar una generación.
+if can_generate and st.session_state.post_draft is None:
+    with st.spinner("✨ Generando propuestas automáticamente..."):
+        _run_generation()
+
+st.caption(
+    "Las propuestas se generan solas al elegir fotos. Cambiá el tono/contexto de arriba "
+    "y tocá \"Regenerar\" para otra versión — cada generación usa la API de OpenAI."
+)
+if st.button("🔄 Regenerar propuestas", disabled=not can_generate, use_container_width=True):
+    with st.spinner("Creando propuestas..."):
+        _run_generation()
 
 draft = st.session_state.post_draft
 if draft:
