@@ -7,6 +7,7 @@ from publisher import config_status, publish_images, DRY_RUN
 from publication_history import load_history, media_key, record_publication, record_existing_publication, summarize_publications
 from config import MEDIA_GEO_CSV, PROFILE_CONTEXT_JSON
 from curation import pick_best
+from s3_library import is_s3_uri, presigned_url
 import media_sources as ms
 import auth
 
@@ -182,7 +183,9 @@ for pos,(_,row) in enumerate(gallery.iterrows()):
     already = bool(row["_published"])
     with cols[pos % 5]:
         thumb = row.get("thumb_path")
-        if isinstance(thumb,str) and Path(thumb).exists():
+        if isinstance(thumb,str) and is_s3_uri(thumb):
+            st.image(presigned_url(thumb), use_container_width=True)
+        elif isinstance(thumb,str) and Path(thumb).exists():
             st.image(thumb, use_container_width=True)
         else:
             st.write("🎬 VIDEO" if row.media_type=="video" else "📷")

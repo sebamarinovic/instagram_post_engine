@@ -4,6 +4,7 @@ import streamlit as st
 
 import media_sources as ms
 import enrich_locations
+import s3_library
 from scan_media import find_media_files, merge_source_into_index, build_index, load_index, scan_source_incremental
 from config import MEDIA_GEO_CSV, MEDIA_INDEX_CSV
 import auth
@@ -80,43 +81,66 @@ for source in sources:
             ms.remove_source(sid)
             st.rerun()
 
-        path_exists = Path(source["path"]).exists()
-        if not path_exists:
-            st.warning("La carpeta no está accesible desde este equipo ahora mismo.")
+        is_s3_source = s3_library.is_s3_uri(source["path"])
 
-        b1, b2, b3 = st.columns(3)
-
-        if b1.button(
-            "🔄 Actualizar biblioteca", key=f"incr_{sid}", disabled=not path_exists,
-            use_container_width=True,
-            help="Solo analiza lo que cambió: agrega archivos nuevos, re-procesa los modificados "
-                 "y quita del índice los que ya no existen. No vuelve a tocar lo que sigue igual."
-        ):
-            with st.spinner(f"Actualizando '{source['name']}'..."):
-                stats = scan_source_incremental(sid, source["name"], source["path"])
-                total = stats["new"] + stats["modified"] + stats["unchanged"]
-            ms.update_scan_stats(sid, total)
-            st.success(
-                f"🆕 {stats['new']} nuevo(s) · ✏️ {stats['modified']} modificado(s) · "
-                f"🗑️ {stats['removed']} eliminado(s) · ⏭️ {stats['unchanged']} sin cambios."
+        if is_s3_source:
+            st.caption(
+                "Fuente en S3 — se alimenta con `migrate_to_s3.py`, corrido en tu PC (ver README, "
+                "Etapa Cloud D). Acá solo se sincroniza el catálogo, no hace falta que tu compu "
+                "esté prendida para verla ni publicarla."
             )
-            st.rerun()
+            bucket, _ = s3_library.parse_s3_uri(source["path"])
+            if st.button(
+                "🔄 Sincronizar desde S3", key=f"s3sync_{sid}", use_container_width=True,
+                help="Descarga el manifiesto actual de S3 (generado por migrate_to_s3.py) y "
+                     "actualiza el índice con lo que haya de nuevo."
+            ):
+                with st.spinner(f"Sincronizando '{source['name']}' desde S3..."):
+                    n = s3_library.sync_manifest_source(sid, source["name"], bucket)
+                ms.update_scan_stats(sid, n)
+                if n:
+                    st.success(f"{n} archivo(s) sincronizado(s) desde S3.")
+                else:
+                    st.warning("El manifiesto en S3 está vacío — corre migrate_to_s3.py en tu PC primero.")
+                st.rerun()
+        else:
+            path_exists = Path(source["path"]).exists()
+            if not path_exists:
+                st.warning("La carpeta no está accesible desde este equipo ahora mismo.")
 
-        if b2.button(
-            "♻️ Reconstruir índice completo", key=f"full_{sid}", disabled=not path_exists,
-            use_container_width=True,
-            help="Vuelve a analizar TODOS los archivos de esta carpeta desde cero, "
-                 "aunque no hayan cambiado. Úsalo si sospechas que el índice quedó inconsistente."
-        ):
-            with st.spinner(f"Reconstruyendo índice de '{source['name']}'..."):
-                paths = find_media_files(source["path"])
-                df_new = build_index(paths, sid, source["name"], source["path"])
-                merge_source_into_index(df_new, sid, replace=True)
-                ms.update_scan_stats(sid, len(df_new))
-            st.success(f"{len(df_new)} archivo(s) indexados desde '{source['name']}'.")
-            st.rerun()
+            b1, b2 = st.columns(2)
 
-        if b3.button("⭐ Marcar como principal", key=f"pri_{sid}", disabled=source.get("primary", False), use_container_width=True):
+            if b1.button(
+                "🔄 Actualizar biblioteca", key=f"incr_{sid}", disabled=not path_exists,
+                use_container_width=True,
+                help="Solo analiza lo que cambió: agrega archivos nuevos, re-procesa los modificados "
+                     "y quita del índice los que ya no existen. No vuelve a tocar lo que sigue igual."
+            ):
+                with st.spinner(f"Actualizando '{source['name']}'..."):
+                    stats = scan_source_incremental(sid, source["name"], source["path"])
+                    total = stats["new"] + stats["modified"] + stats["unchanged"]
+                ms.update_scan_stats(sid, total)
+                st.success(
+                    f"🆕 {stats['new']} nuevo(s) · ✏️ {stats['modified']} modificado(s) · "
+                    f"🗑️ {stats['removed']} eliminado(s) · ⏭️ {stats['unchanged']} sin cambios."
+                )
+                st.rerun()
+
+            if b2.button(
+                "♻️ Reconstruir índice completo", key=f"full_{sid}", disabled=not path_exists,
+                use_container_width=True,
+                help="Vuelve a analizar TODOS los archivos de esta carpeta desde cero, "
+                     "aunque no hayan cambiado. Úsalo si sospechas que el índice quedó inconsistente."
+            ):
+                with st.spinner(f"Reconstruyendo índice de '{source['name']}'..."):
+                    paths = find_media_files(source["path"])
+                    df_new = build_index(paths, sid, source["name"], source["path"])
+                    merge_source_into_index(df_new, sid, replace=True)
+                    ms.update_scan_stats(sid, len(df_new))
+                st.success(f"{len(df_new)} archivo(s) indexados desde '{source['name']}'.")
+                st.rerun()
+
+        if st.button("⭐ Marcar como principal", key=f"pri_{sid}", disabled=source.get("primary", False), use_container_width=True):
             ms.set_primary(sid)
             st.rerun()
 

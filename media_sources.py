@@ -79,3 +79,31 @@ def ensure_uploads_source(path, name="📱 Subidas desde el celular"):
         if s.get("path") == path:
             return s["id"]
     return add_source(name, path)
+
+# Fixed (not random) id: migrate_to_s3.py runs on a different machine than
+# the deployed app and stamps this same id into every manifest row it
+# writes to S3 — a random per-machine uuid (like add_source generates)
+# would never match up across the two.
+S3_LIBRARY_SOURCE_ID = "s3-library"
+
+def ensure_s3_source(bucket, prefix="library/", name="☁️ Librería en S3"):
+    """Find (or create) the source that represents the bulk-migrated S3
+    library. Its 'path' is an s3://bucket/prefix marker, not a real
+    filesystem path — the rest of the app detects it (str starting with
+    "s3://") to use S3-appropriate actions instead of filesystem ones."""
+    data = _load_raw()
+    sources = data.setdefault("sources", [])
+    for s in sources:
+        if s["id"] == S3_LIBRARY_SOURCE_ID:
+            return S3_LIBRARY_SOURCE_ID
+    sources.append({
+        "id": S3_LIBRARY_SOURCE_ID,
+        "name": name,
+        "path": f"s3://{bucket}/{prefix}",
+        "enabled": True,
+        "primary": len(sources) == 0,
+        "last_scanned_at": None,
+        "last_scan_items": 0,
+    })
+    _save_raw(data)
+    return S3_LIBRARY_SOURCE_ID

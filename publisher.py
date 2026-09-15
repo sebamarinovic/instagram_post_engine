@@ -8,6 +8,8 @@ import boto3
 import requests
 from dotenv import load_dotenv
 
+from s3_library import is_s3_uri, presigned_url
+
 load_dotenv()
 BASE = "https://graph.instagram.com"
 
@@ -39,6 +41,10 @@ def _bucket():
     return v
 
 def upload_and_presign(path, expires=7200):
+    if is_s3_uri(path):
+        # Already migrated to S3 (Etapa Cloud D) — sign the existing
+        # object instead of downloading it just to re-upload it.
+        return presigned_url(path, expires=expires)
     path=Path(path)
     prefix=os.getenv("S3_PREFIX","instagram-rebuild").strip("/")
     key=f"{prefix}/{int(time.time())}_{path.name}"
