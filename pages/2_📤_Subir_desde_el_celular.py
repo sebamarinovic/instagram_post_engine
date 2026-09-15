@@ -22,44 +22,55 @@ st.caption(
 source_id = ms.ensure_uploads_source(UPLOADS_DIR)
 source = ms.get_source(source_id)
 
-allowed_exts = sorted(e.lstrip(".") for e in (IMAGE_EXTS | VIDEO_EXTS))
+allowed_exts = IMAGE_EXTS | VIDEO_EXTS
+# No "type=" restriction here on purpose: Safari/iOS sometimes fails to
+# hand off HEIC photos picked from the native gallery back to a
+# type-restricted file input (the picker confirms a selection but the
+# uploader ends up empty). Extensions are filtered below instead.
 uploaded = st.file_uploader(
     "Selecciona fotos o videos",
-    type=allowed_exts,
     accept_multiple_files=True,
 )
 
 if uploaded:
-    st.write(f"{len(uploaded)} archivo(s) listo(s) para subir.")
-    if st.button("⬆️ Subir y procesar", type="primary", use_container_width=True):
-        progress = st.progress(0.0, text="Guardando archivos...")
-        saved, skipped = 0, 0
-        for i, f in enumerate(uploaded, start=1):
-            data = f.getvalue()
-            digest = hashlib.sha256(data).hexdigest()[:12]
-            stem = Path(f.name).stem
-            ext = Path(f.name).suffix.lower()
-            # content-hash suffix: re-uploading the exact same file is a
-            # no-op (same target path), and two different files that
-            # happen to share a name never collide.
-            target = UPLOADS_DIR / f"{stem}_{digest}{ext}"
-            if target.exists():
-                skipped += 1
-            else:
-                target.write_bytes(data)
-                saved += 1
-            progress.progress(i / len(uploaded), text=f"{i}/{len(uploaded)}")
-        progress.empty()
-
-        with st.spinner("Analizando archivos nuevos..."):
-            stats = scan_source_incremental(source_id, source["name"], str(UPLOADS_DIR))
-        ms.update_scan_stats(source_id, stats["new"] + stats["modified"] + stats["unchanged"])
-
-        st.success(
-            f"✅ {saved} archivo(s) subido(s)"
-            + (f" ({skipped} ya existían, se omitieron)" if skipped else "")
-            + f". 🆕 {stats['new']} nuevo(s) analizado(s) · ✏️ {stats['modified']} actualizado(s)."
+    valid = [f for f in uploaded if Path(f.name).suffix.lower() in allowed_exts]
+    invalid = [f for f in uploaded if f not in valid]
+    if invalid:
+        st.warning(
+            "Se ignoraron " + str(len(invalid)) + " archivo(s) con formato no soportado: "
+            + ", ".join(f.name for f in invalid)
         )
+    if valid:
+        st.write(f"{len(valid)} archivo(s) listo(s) para subir.")
+        if st.button("⬆️ Subir y procesar", type="primary", use_container_width=True):
+            progress = st.progress(0.0, text="Guardando archivos...")
+            saved, skipped = 0, 0
+            for i, f in enumerate(valid, start=1):
+                data = f.getvalue()
+                digest = hashlib.sha256(data).hexdigest()[:12]
+                stem = Path(f.name).stem
+                ext = Path(f.name).suffix.lower()
+                # content-hash suffix: re-uploading the exact same file is a
+                # no-op (same target path), and two different files that
+                # happen to share a name never collide.
+                target = UPLOADS_DIR / f"{stem}_{digest}{ext}"
+                if target.exists():
+                    skipped += 1
+                else:
+                    target.write_bytes(data)
+                    saved += 1
+                progress.progress(i / len(valid), text=f"{i}/{len(valid)}")
+            progress.empty()
+
+            with st.spinner("Analizando archivos nuevos..."):
+                stats = scan_source_incremental(source_id, source["name"], str(UPLOADS_DIR))
+            ms.update_scan_stats(source_id, stats["new"] + stats["modified"] + stats["unchanged"])
+
+            st.success(
+                f"✅ {saved} archivo(s) subido(s)"
+                + (f" ({skipped} ya existían, se omitieron)" if skipped else "")
+                + f". 🆕 {stats['new']} nuevo(s) analizado(s) · ✏️ {stats['modified']} actualizado(s)."
+            )
 
 st.divider()
 st.caption(f"Carpeta de subidas en el servidor: `{UPLOADS_DIR}` · fuente: **{source['name']}**")
