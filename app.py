@@ -49,12 +49,20 @@ if "source_id" in df.columns:
 
 df, duplicate_count = dedupe_by_content(df)
 
-DEFAULT_PROFILE = """Sebastián. Chileno-croata 🇨🇱🇭🇷.
-Ingeniero Civil Industrial con vínculo a metalurgia y procesos industriales.
-Interés profesional en Data Science, inteligencia artificial y tecnología.
-Hobbies: viajes, fotografía, drone/FPV, tecnología y conocer nuevos lugares.
-Emprendedor y fundador de un proyecto tecnológico.
-El Instagram es personal: lo profesional es contexto, no tema obligatorio."""
+DEFAULT_PROFILE = """Sebastián. Chileno-croata 🇨🇱🇭🇷. Ingeniero Civil Industrial, pero acá no hablo de trabajo.
+
+Este Instagram construye una identidad en torno a 4 pilares: viajes, tecnología,
+fotografía y experiencias. Cada publicación aporta a al menos uno de esos ejes —
+un lugar nuevo, una toma con drone/FPV, un detalle técnico o una historia vivida
+que valga la pena contar.
+
+Objetivo: crecer como creador de contenido en ese nicho (viajes + tech + foto),
+con voz auténtica y cercana, no corporativa ni publicitaria. Prioriza historias
+reales y detalles concretos por sobre frases genéricas o inspiracionales.
+
+Hobbies que alimentan el contenido: viajar, fotografía, drone/FPV, tecnología,
+descubrir lugares nuevos. Emprendedor de un proyecto tecnológico (contexto de
+voz, no tema obligatorio)."""
 
 profile_saved = DEFAULT_PROFILE
 if PROFILE_CONTEXT_JSON.exists():
