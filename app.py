@@ -308,18 +308,7 @@ def _run_generation():
         st.error(f"No se pudieron generar las propuestas: {e}")
         st.session_state.post_draft = False
 
-# Generación automática: apenas hay una selección válida sin propuestas
-# todavía, se genera sola (sin esperar un click). Cambiar la selección
-# (o el contexto de arriba y "Regenerar") vuelve a disparar una generación.
-if can_generate and st.session_state.post_draft is None:
-    with st.spinner("✨ Generando propuestas automáticamente..."):
-        _run_generation()
-
-st.caption(
-    "Las propuestas se generan solas al elegir fotos. Cambiá el tono/contexto de arriba "
-    "y tocá \"Regenerar\" para otra versión — cada generación usa la API de OpenAI."
-)
-if st.button("🔄 Regenerar propuestas", disabled=not can_generate, use_container_width=True):
+if st.button("✅ Listo, generar propuestas", type="primary", disabled=not can_generate, use_container_width=True):
     with st.spinner("Creando propuestas..."):
         _run_generation()
 
