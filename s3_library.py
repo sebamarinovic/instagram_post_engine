@@ -20,7 +20,12 @@ from botocore.exceptions import ClientError
 from scan_media import merge_source_into_index
 
 S3_SCHEME = "s3://"
-MANIFEST_KEY = "manifest/s3_library.csv"
+# Everything the app writes to S3 lives under this one prefix, matching
+# the scope of InstagramRebuildS3Policy (instagram-rebuild/*) — so bulk
+# library storage needs no separate IAM grant beyond what publisher.py's
+# temporary staging uploads already use.
+S3_PREFIX = "instagram-rebuild"
+MANIFEST_KEY = f"{S3_PREFIX}/manifest/s3_library.csv"
 
 
 def is_s3_uri(value):
@@ -59,7 +64,13 @@ def download_manifest(bucket, manifest_key=MANIFEST_KEY):
     try:
         obj = s3.get_object(Bucket=bucket, Key=manifest_key)
     except ClientError as e:
-        if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+        # NoSuchKey/404: the manifest genuinely doesn't exist yet (first
+        # migration). AccessDenied: without s3:ListBucket, S3 can't tell
+        # the caller "doesn't exist" from "no permission" and reports the
+        # latter — treated the same way here, since a real permission
+        # problem will surface distinctly (and clearly) the moment
+        # upload_manifest's put_object is attempted instead.
+        if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404", "AccessDenied"):
             return pd.DataFrame()
         raise
     return pd.read_csv(io.BytesIO(obj["Body"].read()))

@@ -86,7 +86,7 @@ def ensure_uploads_source(path, name="📱 Subidas desde el celular"):
 # would never match up across the two.
 S3_LIBRARY_SOURCE_ID = "s3-library"
 
-def ensure_s3_source(bucket, prefix="library/", name="☁️ Librería en S3"):
+def ensure_s3_source(bucket, prefix="instagram-rebuild/library/", name="☁️ Librería en S3"):
     """Find (or create) the source that represents the bulk-migrated S3
     library. Its 'path' is an s3://bucket/prefix marker, not a real
     filesystem path — the rest of the app detects it (str starting with

@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 import media_sources as ms
 from config import MEDIA_INDEX_CSV
 from scan_media import load_index
-from s3_library import download_manifest, upload_manifest, upload_file, make_s3_uri, MANIFEST_KEY
+from s3_library import download_manifest, upload_manifest, upload_file, make_s3_uri, MANIFEST_KEY, S3_PREFIX
 
 CHECKPOINT_EVERY = 50
 
@@ -84,13 +84,13 @@ def main():
             try:
                 content_hash = row["content_hash"]
                 ext = row.get("ext") or local_path.suffix.lower()
-                key = f"library/{content_hash}{ext}"
+                key = f"{S3_PREFIX}/library/{content_hash}{ext}"
                 upload_file(local_path, bucket, key)
 
                 thumb_key = None
                 thumb_local = row.get("thumb_path")
                 if isinstance(thumb_local, str) and Path(thumb_local).exists():
-                    thumb_key = f"thumbnails/{content_hash}.jpg"
+                    thumb_key = f"{S3_PREFIX}/thumbnails/{content_hash}.jpg"
                     upload_file(thumb_local, bucket, thumb_key)
 
                 new_row = row.to_dict()
@@ -98,7 +98,7 @@ def main():
                 new_row["thumb_path"] = make_s3_uri(bucket, thumb_key) if thumb_key else None
                 new_row["source_id"] = source_id
                 new_row["source_name"] = "☁️ Librería en S3"
-                new_row["source_path"] = make_s3_uri(bucket, "library/")
+                new_row["source_path"] = make_s3_uri(bucket, f"{S3_PREFIX}/library/")
                 new_row["available_local"] = True
                 new_rows.append(new_row)
                 uploaded += 1
@@ -115,7 +115,7 @@ def main():
             manifest_df = _checkpoint(manifest_df, new_rows, bucket)
 
     print(
-        f"\nListo. {uploaded:,} archivo(s) nuevo(s) migrado(s) a s3://{bucket}/library/ "
+        f"\nListo. {uploaded:,} archivo(s) nuevo(s) migrado(s) a s3://{bucket}/{S3_PREFIX}/library/ "
         f"· {missing_local:,} omitido(s) (no encontrado(s) en este equipo) "
         f"· {failed:,} con error "
         f"· manifiesto: s3://{bucket}/{MANIFEST_KEY} ({len(manifest_df):,} fila(s) en total)."
