@@ -189,7 +189,10 @@ c4.metric("✅ Seleccionadas", len(st.session_state.selected_paths))
 c5.metric("📤 Publicadas", len(published_set))
 
 st.subheader("🖼️ Material")
-gallery = work.sort_values(["quality_score","captured_at"], ascending=[False,True]).head(100)
+st.session_state.setdefault("gallery_limit", 100)
+work_sorted = work.sort_values(["quality_score","captured_at"], ascending=[False,True])
+gallery = work_sorted.head(st.session_state.gallery_limit)
+st.caption(f"Mostrando {len(gallery)} de {len(work_sorted)} — usa los filtros de la izquierda para acotar, o cargá más abajo.")
 cols = st.columns(5)
 
 for pos,(_,row) in enumerate(gallery.iterrows()):
@@ -219,6 +222,11 @@ for pos,(_,row) in enumerate(gallery.iterrows()):
             on_change=set_selected,
             args=(path, widget_key)
         )
+
+if len(gallery) < len(work_sorted):
+    if st.button(f"⬇️ Mostrar 100 más ({len(work_sorted) - len(gallery)} restantes)", use_container_width=True):
+        st.session_state.gallery_limit += 100
+        st.rerun()
 
 selected_df = df[df.path.astype(str).isin(st.session_state.selected_paths)].copy()
 selected_keys = set(selected_df["path"].astype(str).map(media_key))
