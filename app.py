@@ -6,9 +6,11 @@ from ai_post_generator import generate_post
 from publisher import config_status, publish_images, DRY_RUN
 from publication_history import load_history, media_key, record_publication, record_existing_publication, summarize_publications
 from instagram_import import import_existing_publications
-from config import MEDIA_GEO_CSV, PROFILE_CONTEXT_JSON
+from config import MEDIA_GEO_CSV, MEDIA_INDEX_CSV, PROFILE_CONTEXT_JSON
 from curation import pick_best
 from s3_library import is_s3_uri, presigned_url
+import location_overrides as loc_overrides
+import enrich_locations
 import media_sources as ms
 import auth
 
@@ -254,6 +256,43 @@ if st.session_state.get("last_auto_curation"):
             st.write(f"- {d.get('filename')} — {d.get('_reason')}")
         if st.button("Ocultar este resumen"):
             st.session_state.last_auto_curation = None
+            st.rerun()
+
+with st.expander("📍 Corregir ubicación de la selección"):
+    st.caption(
+        "Usa esto cuando el GPS o la inferencia automática se equivocó (ej. metadatos "
+        "dicen Iquique pero la foto es de Grecia). La corrección queda guardada y le "
+        "gana al cálculo automático incluso después de volver a 'Recalcular ubicación'."
+    )
+    if selected_df.empty:
+        st.info("Selecciona al menos una foto arriba para corregir su ubicación.")
+    else:
+        current_countries = sorted(selected_df["country"].dropna().astype(str).unique())
+        current_cities = sorted(selected_df["city"].dropna().astype(str).unique())
+        st.caption(
+            f"Ubicación actual en la selección: "
+            f"{', '.join(current_cities) or 'sin ciudad'} · {', '.join(current_countries) or 'sin país'}"
+        )
+        oc1, oc2 = st.columns(2)
+        correct_country = oc1.text_input("País correcto", placeholder="Grecia")
+        correct_city = oc2.text_input("Ciudad correcta (opcional)", placeholder="Hydra")
+        if st.button(
+            f"📍 Corregir ubicación de {len(selected_df)} foto(s)",
+            disabled=not correct_country.strip(),
+            use_container_width=True,
+        ):
+            for r in selected_df.to_dict("records"):
+                loc_overrides.set_override(
+                    r["path"], r.get("content_hash"),
+                    country=correct_country.strip(),
+                    city=correct_city.strip() or None,
+                )
+            with st.spinner("Aplicando corrección y recalculando ubicaciones..."):
+                enrich_locations.main(str(MEDIA_INDEX_CSV), str(MEDIA_GEO_CSV))
+            st.session_state.flash_message = (
+                f"✅ Ubicación corregida a {correct_city.strip() + ', ' if correct_city.strip() else ''}"
+                f"{correct_country.strip()} para {len(selected_df)} foto(s)."
+            )
             st.rerun()
 
 with st.expander("🕘 Registrar selección como publicación antigua"):

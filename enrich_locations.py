@@ -3,6 +3,7 @@ import pandas as pd
 import reverse_geocoder as rg
 
 from config import MEDIA_INDEX_CSV, MEDIA_GEO_CSV
+from location_overrides import apply_overrides
 
 COUNTRY_NAMES = {
     "CL":"Chile","HR":"Croacia","JP":"Japón","EG":"Egipto","TR":"Turquía","BR":"Brasil",
@@ -73,6 +74,7 @@ def main(csv_path, out_path, infer_hours=12):
         df.at[idx,"location_source"] = "time_inferred"
 
     df.drop(columns=["lat_r","lon_r"], inplace=True)
+    df = apply_overrides(df)
     df.to_csv(out_path, index=False)
 
     print(f"TOTAL: {len(df)}")
